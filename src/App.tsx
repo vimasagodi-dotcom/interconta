@@ -17,8 +17,14 @@ import DefinicoesPage from "@/pages/DefinicoesPage";
 import PortalPage from "@/pages/PortalPage";
 import PortalContaPage from "@/pages/PortalContaPage";
 import PortalDocumentosPage from "@/pages/PortalDocumentosPage";
-import PortalMensagensPage from "@/pages/PortalMensagensPage";
+// import PortalColaboradoresPage from "@/pages/PortalColaboradoresPage";
+// import TOConlinePage from "@/pages/TOCONlinePage";
+// import PortalTOConlinePage from "@/pages/PortalTOCONlinePage";
+// import AgendaPage from "@/pages/AgendaPage";
+// import CorreioPage from "@/pages/CorreioPage";
+// import AgendaNotificationManager from "@/components/AgendaNotificationManager";
 import NotFound from "@/pages/NotFound";
+
 
 const queryClient = new QueryClient();
 
@@ -34,7 +40,8 @@ const ProtectedRoutes = () => {
           <Route path="/portal" element={<PortalPage />} />
           <Route path="/portal/conta" element={<PortalContaPage />} />
           <Route path="/portal/documentos" element={<PortalDocumentosPage />} />
-          <Route path="/portal/mensagens" element={<PortalMensagensPage />} />
+          {/* <Route path="/portal/toconline" element={<PortalTOConlinePage />} /> */}
+          {/* <Route path="/portal/colaboradores" element={<PortalColaboradoresPage />} /> */}
           <Route path="*" element={<Navigate to="/portal" replace />} />
         </Route>
       </Routes>
@@ -51,14 +58,19 @@ const ProtectedRoutes = () => {
         <Route path="/tarefas" element={<TarefasPage />} />
         <Route path="/lancamentos" element={<LancamentosPage />} />
         <Route path="/documentos" element={<DocumentosPage />} />
+        {/* <Route path="/toconline" element={<TOConlinePage />} /> */}
+        {/* <Route path="/agenda" element={<AgendaPage />} /> */}
         <Route path="/faturacao" element={<FaturacaoPage />} />
+        {/* <Route path="/correio" element={<CorreioPage />} /> */}
         <Route path="/definicoes" element={<DefinicoesPage />} />
+
         
         {/* Portal Routes for Impersonation (Admin viewing as Client) */}
         <Route path="/portal" element={<PortalPage />} />
         <Route path="/portal/conta" element={<PortalContaPage />} />
         <Route path="/portal/documentos" element={<PortalDocumentosPage />} />
-        <Route path="/portal/mensagens" element={<PortalMensagensPage />} />
+        {/* <Route path="/portal/toconline" element={<PortalTOConlinePage />} /> */}
+        {/* <Route path="/portal/colaboradores" element={<PortalColaboradoresPage />} /> */}
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
@@ -82,6 +94,7 @@ const App = () => (
       <Sonner />
       <AuthProvider>
         <BrowserRouter>
+          {/* <AgendaNotificationManager /> */}
           <Routes>
             <Route path="/login" element={<LoginRoute />} />
             <Route path="/*" element={<ProtectedRoutes />} />

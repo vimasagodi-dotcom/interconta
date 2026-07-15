@@ -13,7 +13,7 @@ const adminNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/relatorios", label: "Relatórios", icon: FileBarChart },
-  { to: "/colaboradores", label: "Colaboradores", icon: Users },
+  // { to: "/colaboradores", label: "Colaboradores", icon: Users },
   { to: "/tarefas", label: "Tarefas", icon: ClipboardList },
   { to: "/documentos", label: "Documentos", icon: FileText },
   { to: "/faturacao", label: "Faturação", icon: Receipt },
