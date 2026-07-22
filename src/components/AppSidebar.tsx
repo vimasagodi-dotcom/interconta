@@ -15,6 +15,7 @@ import {
   Receipt,
   FileBarChart,
   Settings,
+  FileSearch2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,6 +27,7 @@ const adminNavItems = [
   { to: "/tarefas", label: "Tarefas", icon: ClipboardList },
   { to: "/documentos", label: "Documentos", icon: FileText },
   { to: "/faturacao", label: "Faturação", icon: Receipt },
+  { to: "/saft", label: "SAF-T", icon: FileSearch2 },
 ];
 
 const clientNavItems = [

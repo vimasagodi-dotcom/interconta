@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analisador SAF-T | Auditoria Local Segura</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+    <div id="app-layout">
+        
+        <!-- SIDEBAR (hidden by default if no file is uploaded, shown after upload) -->
+        <aside id="app-sidebar" style="display: none;">
+            <div class="logo-container">
+                <div class="logo-icon">
+                    <i data-lucide="shield-check"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>SAF-T Analyzer</h1>
+                    <span>Auditoria Local</span>
+                </div>
+            </div>
+
+            <ul class="nav-menu">
+                <li class="nav-item active" data-tab="dashboard">
+                    <button><i data-lucide="layout-dashboard"></i>Dashboard</button>
+                </li>
+                <li class="nav-item" data-tab="invoices">
+                    <button><i data-lucide="file-text"></i>Faturas</button>
+                </li>
+                <li class="nav-item" data-tab="customers">
+                    <button><i data-lucide="users"></i>Clientes</button>
+                </li>
+                <li class="nav-item" data-tab="products">
+                    <button><i data-lucide="shopping-bag"></i>Produtos</button>
+                </li>
+                <li class="nav-item" data-tab="audit">
+                    <button><i data-lucide="activity"></i>Auditoria & NIF</button>
+                </li>
+                <li class="nav-item" data-tab="vat">
+                    <button><i data-lucide="percent"></i>Resumo de IVA</button>
+                </li>
+            </ul>
+
+            <div class="sidebar-footer">
+                <p>Analisador SAF-T v1.0.0</p>
+                <p>Processamento 100% Local</p>
+            </div>
+        </aside>
+
+        <!-- MAIN WINDOW -->
+        <main>
+            <!-- TOPBAR (hidden by default, shown after upload) -->
+            <header id="app-header" style="display: none;">
+                <div class="header-title">
+                    <h2 id="current-tab-title">Dashboard</h2>
+                </div>
+                <div class="header-actions">
+                    <span id="loaded-file-info" style="font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                        <i data-lucide="file-code" style="color: var(--primary);"></i>
+                        <span id="filename-display">saft.xml</span>
+                    </span>
+                    <button id="btn-reload" class="btn btn-secondary"><i data-lucide="upload"></i>Novo Ficheiro</button>
+                </div>
+            </header>
+
+            <div class="content-container">
+                
+                <!-- LOADING OVERLAY -->
+                <div id="loading-overlay" class="loading-overlay">
+                    <div class="spinner"></div>
+                    <p id="loading-text">A processar ficheiro XML...</p>
+                </div>
+
+                <!-- 1. UPLOAD VIEW (Visible initially) -->
+                <div id="upload-view">
+                    <div class="upload-card">
+                        <div class="upload-icon">
+                            <i data-lucide="upload-cloud" style="width: 36px; height: 36px;"></i>
+                        </div>
+                        <h2 style="font-size: 28px; font-weight: 700; margin-bottom: 8px;">Analisador SAF-T</h2>
+                        <p style="color: var(--text-secondary); margin-bottom: 32px; max-width: 480px; margin-left: auto; margin-right: auto;">
+                            Faça o upload do ficheiro SAF-T (PT) para analisar instantaneamente a faturação, clientes, produtos e inconsistências fiscais. Os seus dados não são enviados para nenhum servidor.
+                        </p>
+
+                        <div id="drop-zone" class="drop-zone">
+                            <i data-lucide="file-up" style="width: 48px; height: 48px; color: var(--text-muted); margin-bottom: 16px;"></i>
+                            <h3>Arraste o ficheiro SAF-T XML aqui</h3>
+                            <p>ou clique para explorar os ficheiros locais</p>
+                            <input type="file" id="file-input" accept=".xml" style="display: none;">
+                            <button type="button" class="btn" onclick="document.getElementById('file-input').click()">
+                                Escolher Ficheiro
+                            </button>
+                        </div>
+                        
+                        <div style="margin-top: 24px; display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--success); font-size: 13px; font-weight: 500;">
+                            <i data-lucide="lock" style="width: 16px; height: 16px;"></i>
+                            <span>Segurança Total: Todo o processamento é feito localmente no seu browser.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. DASHBOARD VIEW -->
+                <div id="tab-dashboard" class="tab-content">
+                    
+                    <!-- Company Card -->
+                    <div class="company-card">
+                        <div class="company-info">
+                            <h3 id="comp-name">Nome da Empresa</h3>
+                            <p id="comp-address">Morada da Empresa</p>
+                        </div>
+                        <div class="company-meta">
+                            <div class="meta-item">
+                                <span>NIF Declarador</span>
+                                <strong id="comp-nif">999999999</strong>
+                            </div>
+                            <div class="meta-item">
+                                <span>Exercício Fiscal</span>
+                                <strong id="comp-year">2026</strong>
+                            </div>
+                            <div class="meta-item">
+                                <span>Período</span>
+                                <strong id="comp-period">01-01 a 12-31</strong>
+                            </div>
+                            <div class="meta-item">
+                                <span>Versão SAF-T</span>
+                                <strong id="comp-version">1.04_01</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- KPI Cards Grid -->
+                    <div class="kpi-grid">
+                        <div class="kpi-card primary">
+                            <div class="kpi-label">Faturação Líquida</div>
+                            <div id="kpi-net-sales" class="kpi-value">0,00 €</div>
+                            <div class="kpi-subtext">Valor total sem IVA</div>
+                        </div>
+                        <div class="kpi-card success">
+                            <div class="kpi-label">IVA Liquidado</div>
+                            <div id="kpi-tax-amount" class="kpi-value">0,00 €</div>
+                            <div class="kpi-subtext">Imposto sobre vendas acumulado</div>
+                        </div>
+                        <div class="kpi-card secondary">
+                            <div class="kpi-label">Faturação Bruta</div>
+                            <div id="kpi-gross-sales" class="kpi-value">0,00 €</div>
+                            <div class="kpi-subtext">Total com IVA incluído</div>
+                        </div>
+                        <div class="kpi-card warning">
+                            <div class="kpi-label">Total Documentos</div>
+                            <div id="kpi-invoice-count" class="kpi-value">0</div>
+                            <div id="kpi-cancelled-sub" class="kpi-subtext">0 cancelados</div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Section -->
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <div class="chart-title">
+                                <span>Evolução Mensal de Vendas</span>
+                                <i data-lucide="trending-up" style="color: var(--primary);"></i>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-monthly"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-title">
+                                <span>Distribuição por Taxa de IVA</span>
+                                <i data-lucide="pie-chart" style="color: var(--secondary);"></i>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-tax"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top 5 Grid -->
+                    <div class="charts-grid" style="grid-template-columns: 1fr 1fr;">
+                        <div class="chart-card">
+                            <div class="chart-title">
+                                <span>Top 5 Clientes por Compras</span>
+                                <i data-lucide="award" style="color: var(--success);"></i>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-top-customers"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-title">
+                                <span>Top 5 Artigos mais Vendidos</span>
+                                <i data-lucide="shopping-bag" style="color: var(--warning);"></i>
+                            </div>
+                            <div class="chart-wrapper">
+                                <canvas id="chart-top-products"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. INVOICES VIEW -->
+                <div id="tab-invoices" class="tab-content">
+                    <div class="table-controls">
+                        <div class="search-input-wrapper">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="invoice-search" class="search-input" placeholder="Pesquisar faturas por número, NIF...">
+                        </div>
+                        <div class="filters-wrapper">
+                            <select id="filter-invoice-type" class="select-filter">
+                                <option value="">Todos os tipos de doc.</option>
+                                <option value="FT">Fatura (FT)</option>
+                                <option value="FS">Fatura Simplificada (FS)</option>
+                                <option value="FR">Fatura-Recibo (FR)</option>
+                                <option value="ND">Nota de Débito (ND)</option>
+                                <option value="NC">Nota de Crédito (NC)</option>
+                            </select>
+                            <select id="filter-invoice-status" class="select-filter">
+                                <option value="">Todos os estados</option>
+                                <option value="N">Ativas (Normal)</option>
+                                <option value="A">Canceladas</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-card">
+                        <div class="table-wrapper">
+                            <table id="invoices-table">
+                                <thead>
+                                    <tr>
+                                        <th>Documento</th>
+                                        <th>Data</th>
+                                        <th>Cliente</th>
+                                        <th>NIF Cliente</th>
+                                        <th>Estado</th>
+                                        <th style="text-align: right;">Val. Líquido</th>
+                                        <th style="text-align: right;">IVA</th>
+                                        <th style="text-align: right;">Val. Bruto</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. CUSTOMERS VIEW -->
+                <div id="tab-customers" class="tab-content">
+                    <div class="table-controls">
+                        <div class="search-input-wrapper">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="customer-search" class="search-input" placeholder="Pesquisar por nome ou NIF...">
+                        </div>
+                    </div>
+
+                    <div class="table-card">
+                        <div class="table-wrapper">
+                            <table id="customers-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID Cliente</th>
+                                        <th>Nome / Razão Social</th>
+                                        <th>NIF</th>
+                                        <th>Localidade</th>
+                                        <th style="text-align: center;">N.º Faturas</th>
+                                        <th style="text-align: right;">Volume de Compras</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. PRODUCTS VIEW -->
+                <div id="tab-products" class="tab-content">
+                    <div class="table-controls">
+                        <div class="search-input-wrapper">
+                            <i data-lucide="search"></i>
+                            <input type="text" id="product-search" class="search-input" placeholder="Pesquisar por código ou descrição...">
+                        </div>
+                    </div>
+
+                    <div class="table-card">
+                        <div class="table-wrapper">
+                            <table id="products-table">
+                                <thead>
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Descrição</th>
+                                        <th>Grupo</th>
+                                        <th style="text-align: center;">Quantidade Vendida</th>
+                                        <th style="text-align: right;">Total Faturado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic rows -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+                        <button id="print-products" class="btn btn-secondary" style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="printer"></i>Imprimir Produtos
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 6. AUDIT / ALERTS VIEW -->
+                <div id="tab-audit" class="tab-content">
+                    <div class="audit-stats">
+                        <div class="audit-stat-card danger">
+                            <div class="num" id="audit-count-danger">0</div>
+                            <div class="label">Erros Críticos</div>
+                        </div>
+                        <div class="audit-stat-card warning">
+                            <div class="num" id="audit-count-warning">0</div>
+                            <div class="label">Avisos Fiscais</div>
+                        </div>
+                        <div class="audit-stat-card info">
+                            <div class="num" id="audit-count-info">0</div>
+                            <div class="label">Notas Informativas</div>
+                        </div>
+                    </div>
+
+                    <h3 style="margin-bottom: 20px; font-weight: 600; font-size: 18px;">Relatório de Inconsistências & Auditoria</h3>
+                    
+                    <div id="audit-alerts-list" class="alert-list">
+                        <!-- Dynamic alerts will appear here -->
+                    </div>
+                </div>
+
+                <!-- 7. VAT SUMMARY VIEW -->
+                <div id="tab-vat" class="tab-content">
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="font-weight: 600; font-size: 18px; margin-bottom: 8px;">Listagem de Resumo de IVA (por tipo de documento)</h3>
+                        <p style="color: var(--text-secondary); font-size: 14px;">Resumo dos valores de incidência e imposto (IVA) organizados por taxa de IVA e tipo de documento.</p>
+                    </div>
+
+                    <div class="table-card">
+                        <div class="table-wrapper">
+                            <table id="vat-summary-table">
+                                <thead>
+                                    <tr>
+                                        <th rowspan="2" style="vertical-align: middle; text-align: left; border-bottom: 2px solid var(--border-color);">Tipo</th>
+                                        <th colspan="2" style="text-align: center; border-bottom: 1px solid var(--border-color);">Isento / Não Sujeito</th>
+                                        <th colspan="2" style="text-align: center; border-bottom: 1px solid var(--border-color);">Reduzido</th>
+                                        <th colspan="2" style="text-align: center; border-bottom: 1px solid var(--border-color);">Intermédio</th>
+                                        <th colspan="2" style="text-align: center; border-bottom: 1px solid var(--border-color);">Normal</th>
+                                        <th colspan="2" style="text-align: center; border-bottom: 1px solid var(--border-color);">Outros</th>
+                                        <th colspan="2" style="text-align: center; border-bottom: 2px solid var(--border-color); background-color: rgba(255,255,255,0.02);">Total</th>
+                                    </tr>
+                                    <tr>
+                                        <!-- Subheadings -->
+                                        <th style="text-align: right; font-size: 11px;">Incid.</th>
+                                        <th style="text-align: right; font-size: 11px;">IVA</th>
+                                        <th style="text-align: right; font-size: 11px;">Incid.</th>
+                                        <th style="text-align: right; font-size: 11px;">IVA</th>
+                                        <th style="text-align: right; font-size: 11px;">Incid.</th>
+                                        <th style="text-align: right; font-size: 11px;">IVA</th>
+                                        <th style="text-align: right; font-size: 11px;">Incid.</th>
+                                        <th style="text-align: right; font-size: 11px;">IVA</th>
+                                        <th style="text-align: right; font-size: 11px;">Incid.</th>
+                                        <th style="text-align: right; font-size: 11px;">IVA</th>
+                                        <th style="text-align: right; font-size: 11px; background-color: rgba(255,255,255,0.02);">Incid.</th>
+                                        <th style="text-align: right; font-size: 11px; background-color: rgba(255,255,255,0.02); font-weight: bold;">IVA</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Dynamic rows from app.js -->
+                                </tbody>
+                            </table>
+                        </div>
+                    <div style="display: flex; justify-content: flex-end; margin-top: 12px;">
+                        <button id="print-vat" class="btn btn-primary" style="display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="printer"></i>Imprimir Resumo de IVA
+                        </button>
+                    </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- DETAIL DRAWER (SLIDE-OUT INVOICE PANEL) -->
+    <div id="drawer-backdrop" class="drawer-backdrop"></div>
+    <div id="invoice-drawer" class="drawer">
+        <div class="drawer-header">
+            <h3 id="drawer-invoice-no">Fatura FT-A/1</h3>
+            <button id="drawer-close-btn" class="drawer-close">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div class="drawer-content">
+            <!-- Section 1: Customer Details -->
+            <div class="drawer-section">
+                <h4>Informação de Faturação</h4>
+                <div class="detail-grid">
+                    <div class="detail-item">
+                        <span>Data de Emissão</span>
+                        <strong id="detail-date">2026-07-22</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span>Tipo de Documento</span>
+                        <strong id="detail-type">Fatura</strong>
+                    </div>
+                    <div class="detail-item" style="grid-column: span 2;">
+                        <span>Cliente</span>
+                        <strong id="detail-customer-name">Cliente Exemplo LDA</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span>NIF Cliente</span>
+                        <strong id="detail-customer-nif">500000000</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span>Estado</span>
+                        <span id="detail-status-badge" class="badge badge-success">Ativa</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Items Table -->
+            <div class="drawer-section">
+                <h4>Itens e Linhas do Documento</h4>
+                <div class="table-card" style="border-radius: var(--radius-sm);">
+                    <div class="table-wrapper">
+                        <table class="drawer-lines-table">
+                            <thead>
+                                <tr>
+                                    <th>Artigo</th>
+                                    <th style="text-align: center;">Qtd.</th>
+                                    <th style="text-align: right;">P. Unit</th>
+                                    <th style="text-align: right;">Total Líq.</th>
+                                </tr>
+                            </thead>
+                            <tbody id="drawer-lines-body">
+                                <!-- Dynamic lines -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 3: Totals -->
+            <div class="drawer-totals">
+                <div class="drawer-totals-row">
+                    <span style="color: var(--text-secondary);">Total Líquido:</span>
+                    <strong id="detail-net-total">0,00 €</strong>
+                </div>
+                <div class="drawer-totals-row">
+                    <span style="color: var(--text-secondary);">Total IVA:</span>
+                    <strong id="detail-tax-total">0,00 €</strong>
+                </div>
+                <div class="drawer-totals-row grand">
+                    <span>Total Bruto:</span>
+                    <strong id="detail-gross-total">0,00 €</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application JavaScript files -->
+    <script src="parser.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

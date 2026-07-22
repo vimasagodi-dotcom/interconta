@@ -15,8 +15,10 @@ import DocumentosPage from "@/pages/DocumentosPage";
 import FaturacaoPage from "@/pages/FaturacaoPage";
 import DefinicoesPage from "@/pages/DefinicoesPage";
 import PortalPage from "@/pages/PortalPage";
+import SafTPage from "@/pages/SafTPage";
 import PortalContaPage from "@/pages/PortalContaPage";
 import PortalDocumentosPage from "@/pages/PortalDocumentosPage";
+import PortalMensagensPage from "@/pages/PortalMensagensPage";
 // import PortalColaboradoresPage from "@/pages/PortalColaboradoresPage";
 // import TOConlinePage from "@/pages/TOCONlinePage";
 // import PortalTOConlinePage from "@/pages/PortalTOCONlinePage";
@@ -40,6 +42,7 @@ const ProtectedRoutes = () => {
           <Route path="/portal" element={<PortalPage />} />
           <Route path="/portal/conta" element={<PortalContaPage />} />
           <Route path="/portal/documentos" element={<PortalDocumentosPage />} />
+          <Route path="/portal/mensagens" element={<PortalMensagensPage />} />
           {/* <Route path="/portal/toconline" element={<PortalTOConlinePage />} /> */}
           {/* <Route path="/portal/colaboradores" element={<PortalColaboradoresPage />} /> */}
           <Route path="*" element={<Navigate to="/portal" replace />} />
@@ -61,7 +64,8 @@ const ProtectedRoutes = () => {
         {/* <Route path="/toconline" element={<TOConlinePage />} /> */}
         {/* <Route path="/agenda" element={<AgendaPage />} /> */}
         <Route path="/faturacao" element={<FaturacaoPage />} />
-        {/* <Route path="/correio" element={<CorreioPage />} /> */}
+        <Route path="/saft" element={<SafTPage />} />
+        {/* <Route path="/agenda" element={<AgendaPage />} /> */}
         <Route path="/definicoes" element={<DefinicoesPage />} />
 
         
@@ -69,6 +73,7 @@ const ProtectedRoutes = () => {
         <Route path="/portal" element={<PortalPage />} />
         <Route path="/portal/conta" element={<PortalContaPage />} />
         <Route path="/portal/documentos" element={<PortalDocumentosPage />} />
+        <Route path="/portal/mensagens" element={<PortalMensagensPage />} />
         {/* <Route path="/portal/toconline" element={<PortalTOConlinePage />} /> */}
         {/* <Route path="/portal/colaboradores" element={<PortalColaboradoresPage />} /> */}
 
@@ -89,7 +94,6 @@ const LoginRoute = () => {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
       <Toaster />
       <Sonner />
       <AuthProvider>
