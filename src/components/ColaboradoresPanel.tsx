@@ -5,12 +5,14 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Pencil, Trash2, Calendar, UserPlus, Loader2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Calendar, UserPlus, Loader2, Printer } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import FeriasCalendarDialog, { fetchFerias, type FeriasDay } from "@/components/FeriasCalendarDialog";
 import { supabase, adminAuth } from "@/lib/supabase";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 export interface Colaborador {
   id: string;
@@ -128,6 +130,61 @@ const ColaboradoresPanel = () => {
   }, []);
   const currentYear = new Date().getFullYear();
 
+  const generateGlobalReport = () => {
+    const doc = new jsPDF();
+    const year = currentYear;
+
+    doc.setFontSize(16);
+    doc.text(`Mapa Global de Férias e Faltas — ${year}`, 14, 20);
+    
+    const rows = colaboradores.map(c => {
+      const colabDays = feriasDays
+        .filter(f => f.colaboradorId === c.id && f.date.startsWith(String(year)))
+        .sort((a, b) => a.date.localeCompare(b.date));
+        
+      const totalDias = colabDays.reduce((acc, d) => {
+        if (d.type === "full") return acc + 1;
+        if (d.type === "morning" || d.type === "afternoon") return acc + 0.5;
+        return acc;
+      }, 0);
+      const totalAllowed = 22 + (c.ferias_transitadas || 0);
+      
+      const datesList = colabDays.map(d => {
+        const dt = new Date(d.date);
+        let prefix = "";
+        if (d.type === "morning") prefix = "(M) ";
+        if (d.type === "afternoon") prefix = "(T) ";
+        if (d.type === "falta") prefix = "(Falta) ";
+        if (d.type === "baixa") prefix = "(Baixa) ";
+        return prefix + dt.toLocaleDateString("pt-PT").slice(0, 5); // Just DD/MM for brevity
+      }).join(", ");
+
+      return [
+        c.name,
+        datesList || "-",
+        String(totalDias),
+        String(totalAllowed - totalDias)
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 28,
+      head: [["Colaborador", "Datas (Férias e Faltas)", "Gozados", "Restantes"]],
+      body: rows,
+      styles: { fontSize: 9 },
+      headStyles: { fillColor: [59, 130, 246] },
+      columnStyles: {
+        0: { cellWidth: 40, fontStyle: 'bold' },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 20, halign: 'center' },
+        3: { cellWidth: 20, halign: 'center' },
+      }
+    });
+
+    doc.save(`mapa_global_ferias_${year}.pdf`);
+    toast.success("Mapa global gerado com sucesso!");
+  };
+
   return (
     <div className="space-y-6">
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -137,10 +194,16 @@ const ColaboradoresPanel = () => {
              {loading ? "A sincronizar com a cloud..." : `${colaboradores.length} colaboradores na equipa`}
           </p>
         </div>
-        <Button className="gap-2" onClick={openCreate} disabled={loading}>
-          <Plus className="w-4 h-4" />
-          Novo Colaborador
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button variant="outline" className="gap-2" onClick={generateGlobalReport} disabled={loading || colaboradores.length === 0}>
+            <Printer className="w-4 h-4" />
+            Imprimir Mapa Global
+          </Button>
+          <Button className="gap-2" onClick={openCreate} disabled={loading}>
+            <Plus className="w-4 h-4" />
+            Novo Colaborador
+          </Button>
+        </div>
       </motion.div>
 
       <div className="relative max-w-md">
