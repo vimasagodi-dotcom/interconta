@@ -149,15 +149,31 @@ const ColaboradoresPanel = () => {
       }, 0);
       const totalAllowed = 22 + (c.ferias_transitadas || 0);
       
-      const datesList = colabDays.map(d => {
+      const MONTHS_PT = [
+        "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+        "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
+      ];
+      
+      const monthsMap: Record<number, string[]> = {};
+      colabDays.forEach(d => {
         const dt = new Date(d.date);
-        let prefix = "";
-        if (d.type === "morning") prefix = "(M) ";
-        if (d.type === "afternoon") prefix = "(T) ";
-        if (d.type === "falta") prefix = "(Falta) ";
-        if (d.type === "baixa") prefix = "(Baixa) ";
-        return prefix + dt.toLocaleDateString("pt-PT").slice(0, 5); // Just DD/MM for brevity
-      }).join(", ");
+        const m = dt.getMonth();
+        const day = dt.getDate();
+        let suffix = "";
+        if (d.type === "morning") suffix = " (Manhã)";
+        if (d.type === "afternoon") suffix = " (Tarde)";
+        if (d.type === "falta") suffix = " (Falta)";
+        if (d.type === "baixa") suffix = " (Baixa)";
+        
+        if (!monthsMap[m]) monthsMap[m] = [];
+        monthsMap[m].push(`${day}${suffix}`);
+      });
+      
+      const datesList = Object.keys(monthsMap)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .map(m => `${MONTHS_PT[m]}: ${monthsMap[m].join(", ")}`)
+        .join("\n");
 
       return [
         c.name,
@@ -169,7 +185,7 @@ const ColaboradoresPanel = () => {
 
     autoTable(doc, {
       startY: 28,
-      head: [["Colaborador", "Datas (Férias e Faltas)", "Gozados", "Restantes"]],
+      head: [["Colaborador", "Meses e Dias", "Gozados", "Restantes"]],
       body: rows,
       styles: { fontSize: 9 },
       headStyles: { fillColor: [59, 130, 246] },
