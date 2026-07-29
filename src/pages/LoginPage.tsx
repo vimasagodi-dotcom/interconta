@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Building2, Lock, Mail, Eye, EyeOff } from "lucide-react";
+import { Building2, Lock, Mail, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 
 const LoginPage = () => {
@@ -77,7 +77,7 @@ const LoginPage = () => {
             <div className="w-10 h-10 rounded-lg gradient-accent flex items-center justify-center">
               <Building2 className="w-6 h-6 text-accent-foreground" />
             </div>
-            <h1 className="text-2xl font-bold text-foreground">ContaGest</h1>
+            <h1 className="text-2xl font-bold text-foreground">INTERCONTA</h1>
           </div>
 
           <h2 className="text-2xl font-bold text-foreground mb-2">Bem-vindo de volta</h2>
@@ -138,6 +138,17 @@ const LoginPage = () => {
             </Button>
           </form>
 
+          <div className="mt-8 pt-8 border-t border-border text-center">
+            <p className="text-sm text-muted-foreground mb-4">Apenas de passagem? Experimente a nossa ferramenta:</p>
+            <Button 
+              variant="outline" 
+              className="w-full gap-2 h-11 border-primary/20 hover:bg-primary/5" 
+              onClick={() => window.open('/analisador-saft/index.html', '_blank')}
+            >
+              <ShieldCheck className="w-4 h-4 text-primary" />
+              Analisador SAF-T Gratuito
+            </Button>
+          </div>
 
         </motion.div>
       </div>
