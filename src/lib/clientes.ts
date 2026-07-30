@@ -190,11 +190,18 @@ export const getRecurringAvencaMovements = (
 
 export const triggerToconlineSync = async (): Promise<{ success: boolean; count?: number; error?: string }> => {
   try {
-    const { data, error } = await supabase.functions.invoke('sync-toconline');
+    const response = await fetch('/api/sync', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
     
-    if (error) {
-      console.error("Erro ao invocar Edge Function:", error);
-      return { success: false, error: error.message };
+    const data = await response.json();
+    
+    if (!response.ok || !data.success) {
+      console.error("Erro ao invocar API de sincronização:", data.error);
+      return { success: false, error: data.error || "Erro desconhecido na API" };
     }
     
     return { success: true, count: data?.count || 0 };
