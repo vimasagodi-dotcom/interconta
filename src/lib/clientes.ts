@@ -203,12 +203,14 @@ export const triggerToconlineSync = async (): Promise<{ success: boolean; count?
       data = textData ? JSON.parse(textData) : {};
     } catch (e) {
       console.error("Failed to parse JSON response:", textData);
-      return { success: false, error: "Resposta inválida do servidor. A funcionalidade pode não estar disponível." };
+      return { success: false, error: `Servidor devolveu resposta inválida: ${textData.substring(0, 100)}...` };
     }
     
     if (!response.ok || !data.success) {
-      console.error("Erro ao invocar API de sincronização:", data.error);
-      return { success: false, error: data.error || "Erro desconhecido na API" };
+      console.error("Erro ao invocar API de sincronização:", textData);
+      // Incluir o conteúdo real da resposta para diagnóstico
+      const errDetails = typeof data.error === 'string' ? data.error : JSON.stringify(data);
+      return { success: false, error: `Erro na API: ${errDetails}` };
     }
     
     return { success: true, count: data?.count || 0 };
