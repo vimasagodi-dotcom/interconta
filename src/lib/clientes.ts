@@ -197,7 +197,14 @@ export const triggerToconlineSync = async (): Promise<{ success: boolean; count?
       }
     });
     
-    const data = await response.json();
+    const textData = await response.text();
+    let data;
+    try {
+      data = textData ? JSON.parse(textData) : {};
+    } catch (e) {
+      console.error("Failed to parse JSON response:", textData);
+      return { success: false, error: "Resposta inválida do servidor. A funcionalidade pode não estar disponível." };
+    }
     
     if (!response.ok || !data.success) {
       console.error("Erro ao invocar API de sincronização:", data.error);
