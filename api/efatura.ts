@@ -262,22 +262,13 @@ export default async function handler(req: any, res: any) {
         const q = new URLSearchParams({
           dataInicioFilter: interval.start,
           dataFimFilter: interval.end,
-          numDocumentoFilter: '',
-          nifAdquirenteFilter: '',
-          classeDocumentoFilter: '',
           semRecibosVerdesFilter: 'N',
         });
         jsonEndpoint = `https://faturas.portaldasfinancas.gov.pt/json/obterDocumentosEmitente.action?${q.toString()}`;
       } else {
         const q = new URLSearchParams({
-          nifEmitenteFilter: '',
           dataInicioFilter: interval.start,
           dataFimFilter: interval.end,
-          estadoDocumentoFilter: '',
-          ambitoAquisicaoFilter: '',
-          ambitoAquisicaoOutrosFilter: '',
-          tipoDocumentoFilter: '',
-          tipoAmbitoAtividadeFilter: '',
         });
         jsonEndpoint = `https://faturas.portaldasfinancas.gov.pt/json/obterDocumentosAdquirente.action?${q.toString()}`;
       }

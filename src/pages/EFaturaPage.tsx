@@ -383,7 +383,9 @@ const EFaturaPage = () => {
 
       if (allInvoices.length === 0) {
         toast.info(
-          `Sessão autenticada na AT com sucesso, mas não foram encontradas faturas de ${tipo} emitidas neste período para o NIF ${activeNif}.`
+          tipo === "vendas"
+            ? `Sessão autenticada na AT com sucesso! No entanto, a AT não devolveu faturas de Vendas emitidas pela empresa (NIF ${activeNif}) no período de ${dataInicio} a ${dataFim}. O filtro é exclusivamente pelo intervalo de datas selecionado. Verifique se as vendas estão noutro ano ou altere as datas.`
+            : `Sessão autenticada na AT com sucesso! No entanto, não foram encontradas faturas de Compras no período de ${dataInicio} a ${dataFim}. O filtro é exclusivamente pelo intervalo de datas.`
         );
         setIsExtracting(false);
         setProgressMsg("");
