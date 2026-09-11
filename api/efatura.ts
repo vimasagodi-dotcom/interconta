@@ -212,15 +212,60 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 5. Dividir o período em intervalos mensais (30 dias) para garantir que não ultrapassa os limites da AT
-    const startDate = new Date(dataInicio || `${new Date().getFullYear()}-01-01`);
-    const endDate = new Date(dataFim || `${new Date().getFullYear()}-12-31`);
+    // 5. Obter Totais Mensais Oficiais da AT (revela todas as faturas e totais por mês, sem limite de 300)
+    let totaisMensais: Array<{ mes: string; numFaturas: number; baseTributavel: number; valorIva: number; total: number }> = [];
+    const targetYear = startDate.getFullYear() || new Date().getFullYear();
+
+    if (targetTipo === 'vendas') {
+      try {
+        const totaisRes = await fetch(`https://faturas.portaldasfinancas.gov.pt/json/obterTotaisMensaisFaturaEmitente.action?anoFilter=${targetYear}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': 'https://faturas.portaldasfinancas.gov.pt/consultarTotaisMensaisFaturaEmitente.action',
+            'Cookie': getCookieHeader(faturasCookies),
+          },
+        });
+        if (totaisRes.ok) {
+          const tData = await totaisRes.json();
+          if (tData?.success && Array.isArray(tData.linhas)) {
+            totaisMensais = tData.linhas.map((row: any) => {
+              const valTotal = (row.valorTotal || 0) / 100;
+              const valIva = (row.valorIva || 0) / 100;
+              const valBase = Math.round((valTotal - valIva) * 100) / 100;
+              return {
+                mes: `${targetYear}-${row.mes}`,
+                numFaturas: row.ndocumentos || 0,
+                baseTributavel: valBase,
+                valorIva: Math.round(valIva * 100) / 100,
+                total: Math.round(valTotal * 100) / 100,
+              };
+            }).sort((a: any, b: any) => a.mes.localeCompare(b.mes));
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao obter totais mensais emitente:', e);
+      }
+    }
+
+    // 6. Dividir o período em lotes dinâmicos para maximizar o número de faturas individuais
+    // Como a AT impõe teto de 300 documentos por pedido, fatiar em intervalos menores permite recolher muito mais documentos.
+    const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+    let sliceStepDays = 7;
+    if (totalDays <= 31) {
+      sliceStepDays = 5; // Período de 1 mês: lotes de 5 dias
+    } else if (totalDays <= 93) {
+      sliceStepDays = 7; // Período de 1 trimestre: lotes de 7 dias
+    } else {
+      sliceStepDays = 14; // Período anual: lotes de 14 dias (26 lotes) para caber no timeout do Vercel
+    }
 
     const intervals: Array<{ start: string; end: string }> = [];
     const cur = new Date(startDate);
     while (cur <= endDate) {
       const batchEnd = new Date(cur);
-      batchEnd.setDate(batchEnd.getDate() + 29);
+      batchEnd.setDate(batchEnd.getDate() + (sliceStepDays - 1));
       const actualEnd = batchEnd > endDate ? new Date(endDate) : batchEnd;
 
       intervals.push({
@@ -228,7 +273,7 @@ export default async function handler(req: any, res: any) {
         end: actualEnd.toISOString().split('T')[0],
       });
 
-      cur.setDate(cur.getDate() + 30);
+      cur.setDate(cur.getDate() + sliceStepDays);
     }
 
     // 6. Consultar endpoint JSON real da AT
@@ -378,6 +423,7 @@ export default async function handler(req: any, res: any) {
       nif: cleanNif,
       count: allInvoices.length,
       invoices: allInvoices,
+      totaisMensais,
     });
   } catch (error: any) {
     console.error('Erro na extração e-Fatura:', error);

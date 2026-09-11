@@ -136,6 +136,14 @@ const EFaturaPage = () => {
     setDataFim(qMap[q].end);
   };
 
+  const handleMonthChange = (monthNum: number) => {
+    const y = ano || "2026";
+    const mStr = String(monthNum).padStart(2, "0");
+    const lastDay = new Date(parseInt(y, 10), monthNum, 0).getDate();
+    setDataInicio(`${y}-${mStr}-01`);
+    setDataFim(`${y}-${mStr}-${String(lastDay).padStart(2, "0")}`);
+  };
+
   // Autenticação direta no e-Fatura sem sair do site
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -380,8 +388,9 @@ const EFaturaPage = () => {
       }
 
       const allInvoices: ExtractedInvoice[] = resData.invoices || [];
+      const hasTotais = Array.isArray(resData.totaisMensais) && resData.totaisMensais.length > 0;
 
-      if (allInvoices.length === 0) {
+      if (allInvoices.length === 0 && !hasTotais) {
         toast.info(
           tipo === "vendas"
             ? `Sessão autenticada na AT com sucesso! No entanto, a AT não devolveu faturas de Vendas emitidas pela empresa (NIF ${activeNif}) no período de ${dataInicio} a ${dataFim}. O filtro é exclusivamente pelo intervalo de datas selecionado. Verifique se as vendas estão noutro ano ou altere as datas.`
@@ -399,29 +408,58 @@ const EFaturaPage = () => {
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
 
-      // Folha 1: Faturas Detalhadas da AT
-      const rowsDetailed = allInvoices.map((inv) => ({
-        "NIF Emitente": inv.nifEmitente,
-        "Nome Emitente": inv.nomeEmitente,
-        "NIF Adquirente": inv.nifAdquirente,
-        "Nome Adquirente": inv.nomeAdquirente,
-        "Tipo Doc": inv.tipoDoc,
-        "Nº Documento": inv.numeroDoc,
-        "Data Emissão": inv.dataEmissao,
-        "Data Registo AT": inv.dataRegisto,
-        "ATCUD": inv.atcud,
-        "Base Tributável (€)": inv.baseTributavel,
-        "Taxa IVA": inv.taxaIva,
-        "Valor IVA (€)": inv.valorIva,
-        "Total com IVA (€)": inv.total,
-        "Estado": inv.estado,
-        "Setor Atividade": inv.setor,
-      }));
+      // Folha 1 (se disponível): Totais Mensais Certificados da AT (oficial mês a mês sem limites)
+      if (hasTotais) {
+        const rowsTotais = resData.totaisMensais.map((tm: any) => ({
+          "Ano / Mês": tm.mes,
+          "Nº Faturas Entregues": tm.numFaturas,
+          "Base Tributável (€)": tm.baseTributavel,
+          "IVA (€)": tm.valorIva,
+          "Valor Total (€)": tm.total,
+        }));
 
-      const wsDetailed = XLSX.utils.json_to_sheet(rowsDetailed);
-      XLSX.utils.book_append_sheet(wb, wsDetailed, "Faturas Detalhadas");
+        const sumFaturas = resData.totaisMensais.reduce((s: number, r: any) => s + (r.numFaturas || 0), 0);
+        const sumBase = resData.totaisMensais.reduce((s: number, r: any) => s + (r.baseTributavel || 0), 0);
+        const sumIva = resData.totaisMensais.reduce((s: number, r: any) => s + (r.valorIva || 0), 0);
+        const sumTotal = resData.totaisMensais.reduce((s: number, r: any) => s + (r.total || 0), 0);
 
-      // Folha 2: Resumo Financeiro e Totais
+        rowsTotais.push({
+          "Ano / Mês": "TOTAL CERTIFICADO AT",
+          "Nº Faturas Entregues": sumFaturas,
+          "Base Tributável (€)": Math.round(sumBase * 100) / 100,
+          "IVA (€)": Math.round(sumIva * 100) / 100,
+          "Valor Total (€)": Math.round(sumTotal * 100) / 100,
+        });
+
+        const wsTotais = XLSX.utils.json_to_sheet(rowsTotais);
+        XLSX.utils.book_append_sheet(wb, wsTotais, "Totais Mensais AT");
+      }
+
+      // Folha 2: Faturas Detalhadas da AT
+      if (allInvoices.length > 0) {
+        const rowsDetailed = allInvoices.map((inv) => ({
+          "NIF Emitente": inv.nifEmitente,
+          "Nome Emitente": inv.nomeEmitente,
+          "NIF Adquirente": inv.nifAdquirente,
+          "Nome Adquirente": inv.nomeAdquirente,
+          "Tipo Doc": inv.tipoDoc,
+          "Nº Documento": inv.numeroDoc,
+          "Data Emissão": inv.dataEmissao,
+          "Data Registo AT": inv.dataRegisto,
+          "ATCUD": inv.atcud,
+          "Base Tributável (€)": inv.baseTributavel,
+          "Taxa IVA": inv.taxaIva,
+          "Valor IVA (€)": inv.valorIva,
+          "Total com IVA (€)": inv.total,
+          "Estado": inv.estado,
+          "Setor Atividade": inv.setor,
+        }));
+
+        const wsDetailed = XLSX.utils.json_to_sheet(rowsDetailed);
+        XLSX.utils.book_append_sheet(wb, wsDetailed, "Faturas Detalhadas");
+      }
+
+      // Folha 3: Resumo Financeiro e Totais
       const totalBase = allInvoices.reduce((acc, cur) => acc + (cur.baseTributavel || 0), 0);
       const totalIva = allInvoices.reduce((acc, cur) => acc + (cur.valorIva || 0), 0);
       const totalGlobal = allInvoices.reduce((acc, cur) => acc + (cur.total || 0), 0);
@@ -432,8 +470,7 @@ const EFaturaPage = () => {
         { "Indicador": "Tipo de Documentos", "Valor": tipo === "compras" ? "Compras (Adquirente)" : "Vendas (Emitente)" },
         { "Indicador": "Data Início", "Valor": dataInicio },
         { "Indicador": "Data Fim", "Valor": dataFim },
-        { "Indicador": "Total de Lotes Semanais", "Valor": totalBatches },
-        { "Indicador": "Total de Documentos Reais Extraídos", "Valor": allInvoices.length },
+        { "Indicador": "Total de Faturas Detalhadas Extraídas", "Valor": allInvoices.length },
         { "Indicador": "Base Tributável Total (€)", "Valor": Math.round(totalBase * 100) / 100 },
         { "Indicador": "Total IVA (€)", "Valor": Math.round(totalIva * 100) / 100 },
         { "Indicador": "Total Global com IVA (€)", "Valor": Math.round(totalGlobal * 100) / 100 },
@@ -784,6 +821,40 @@ const EFaturaPage = () => {
                     4º Trim
                   </Button>
                 </div>
+              </div>
+
+              {/* Seletor Rápido Mês a Mês */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-border/50">
+                <span className="text-[11px] font-semibold text-muted-foreground mr-1">Meses:</span>
+                {[
+                  { n: 1, l: "Jan" },
+                  { n: 2, l: "Fev" },
+                  { n: 3, l: "Mar" },
+                  { n: 4, l: "Abr" },
+                  { n: 5, l: "Mai" },
+                  { n: 6, l: "Jun" },
+                  { n: 7, l: "Jul" },
+                  { n: 8, l: "Ago" },
+                  { n: 9, l: "Set" },
+                  { n: 10, l: "Out" },
+                  { n: 11, l: "Nov" },
+                  { n: 12, l: "Dez" },
+                ].map((m) => {
+                  const mStr = String(m.n).padStart(2, "0");
+                  const isActive = dataInicio === `${ano}-${mStr}-01`;
+                  return (
+                    <Button
+                      key={m.n}
+                      type="button"
+                      variant={isActive ? "default" : "outline"}
+                      size="sm"
+                      className={`h-6 text-[11px] px-2 ${isActive ? "bg-emerald-600 text-white hover:bg-emerald-700" : ""}`}
+                      onClick={() => handleMonthChange(m.n)}
+                    >
+                      {m.l}
+                    </Button>
+                  );
+                })}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
