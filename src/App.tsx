@@ -1,32 +1,35 @@
+import React, { Suspense, lazy } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import LoginPage from "@/pages/LoginPage";
 import AppLayout from "@/components/AppLayout";
-import DashboardPage from "@/pages/DashboardPage";
-import ClientesPage from "@/pages/ClientesPage";
-import RelatoriosPage from "@/pages/RelatoriosPage";
-import TarefasPage from "@/pages/TarefasPage";
-import LancamentosPage from "@/pages/LancamentosPage";
-import DocumentosPage from "@/pages/DocumentosPage";
-import FaturacaoPage from "@/pages/FaturacaoPage";
-import DefinicoesPage from "@/pages/DefinicoesPage";
-import PortalPage from "@/pages/PortalPage";
-import SafTPage from "@/pages/SafTPage";
-import EFaturaPage from "@/pages/EFaturaPage";
-import PortalContaPage from "@/pages/PortalContaPage";
-import PortalDocumentosPage from "@/pages/PortalDocumentosPage";
-import PortalMensagensPage from "@/pages/PortalMensagensPage";
-// import PortalColaboradoresPage from "@/pages/PortalColaboradoresPage";
-// import TOConlinePage from "@/pages/TOCONlinePage";
-// import PortalTOConlinePage from "@/pages/PortalTOCONlinePage";
-// import AgendaPage from "@/pages/AgendaPage";
-// import CorreioPage from "@/pages/CorreioPage";
-// import AgendaNotificationManager from "@/components/AgendaNotificationManager";
-import NotFound from "@/pages/NotFound";
+
+// Lazy loading das páginas para arranque ultra-rápido do Interconta
+const LoginPage = lazy(() => import("@/pages/LoginPage"));
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const ClientesPage = lazy(() => import("@/pages/ClientesPage"));
+const RelatoriosPage = lazy(() => import("@/pages/RelatoriosPage"));
+const TarefasPage = lazy(() => import("@/pages/TarefasPage"));
+const LancamentosPage = lazy(() => import("@/pages/LancamentosPage"));
+const DocumentosPage = lazy(() => import("@/pages/DocumentosPage"));
+const FaturacaoPage = lazy(() => import("@/pages/FaturacaoPage"));
+const DefinicoesPage = lazy(() => import("@/pages/DefinicoesPage"));
+const PortalPage = lazy(() => import("@/pages/PortalPage"));
+const SafTPage = lazy(() => import("@/pages/SafTPage"));
+const EFaturaPage = lazy(() => import("@/pages/EFaturaPage"));
+const PortalContaPage = lazy(() => import("@/pages/PortalContaPage"));
+const PortalDocumentosPage = lazy(() => import("@/pages/PortalDocumentosPage"));
+const PortalMensagensPage = lazy(() => import("@/pages/PortalMensagensPage"));
+const NotFound = lazy(() => import("@/pages/NotFound"));
+
+const PageLoader = () => (
+  <div className="flex h-[60vh] w-full items-center justify-center">
+    <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+  </div>
+);
 
 
 const queryClient = new QueryClient();
@@ -101,10 +104,12 @@ const App = () => (
       <AuthProvider>
         <BrowserRouter>
           {/* <AgendaNotificationManager /> */}
-          <Routes>
-            <Route path="/login" element={<LoginRoute />} />
-            <Route path="/*" element={<ProtectedRoutes />} />
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/login" element={<LoginRoute />} />
+              <Route path="/*" element={<ProtectedRoutes />} />
+            </Routes>
+          </Suspense>
         </BrowserRouter>
       </AuthProvider>
     </TooltipProvider>

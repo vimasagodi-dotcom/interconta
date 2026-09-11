@@ -34,7 +34,6 @@ import {
 } from "@/components/ui/select";
 import { fetchClients, type Client } from "@/lib/clientes";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 
 interface ExtractedInvoice {
   nifEmitente: string;
@@ -307,7 +306,8 @@ const EFaturaPage = () => {
       setExtractionProgress(85);
       setProgressMsg(`A construir folha de cálculo Excel (.xlsx) com ${allInvoices.length} faturas...`);
 
-      // 1. Criar Livro de Trabalho Excel com SheetJS
+      // 1. Carregar SheetJS dinamicamente a pedido para máxima rapidez do site
+      const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
 
       // Folha 1: Faturas Detalhadas
