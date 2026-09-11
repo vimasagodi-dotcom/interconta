@@ -66,11 +66,7 @@ const LoginPage = () => {
     }, 300);
   };
 
-  const fillCredentials = (userEmail: string, userPass: string) => {
-    setEmail(userEmail);
-    setPassword(userPass);
-    setError("");
-  };
+
 
   return (
     <div className="min-h-screen flex">
@@ -217,39 +213,7 @@ const LoginPage = () => {
                 </Button>
               </form>
 
-              {/* Helpful Presets */}
-              <div className="pt-3">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Credenciais de Exemplo (clique para preencher):
-                </p>
-                <div className="flex flex-col gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fillCredentials("vimasagodi@gmail.com", "Interconta2026*")}
-                    className="flex items-center justify-between p-2.5 rounded-lg border border-border/60 hover:bg-muted/40 text-left transition-colors text-xs"
-                  >
-                    <div>
-                      <span className="font-semibold text-foreground">👑 Admin:</span> vimasagodi@gmail.com
-                    </div>
-                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-mono">
-                      Interconta2026*
-                    </span>
-                  </button>
 
-                  <button
-                    type="button"
-                    onClick={() => fillCredentials("ne_dias@sapo.pt", "Interconta2026*")}
-                    className="flex items-center justify-between p-2.5 rounded-lg border border-border/60 hover:bg-muted/40 text-left transition-colors text-xs"
-                  >
-                    <div>
-                      <span className="font-semibold text-foreground">💼 Colaborador:</span> ne_dias@sapo.pt
-                    </div>
-                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded font-mono">
-                      Interconta2026*
-                    </span>
-                  </button>
-                </div>
-              </div>
             </TabsContent>
 
             {/* TAB 2: CLIENT PORTAL */}
@@ -357,3 +321,4 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
+
