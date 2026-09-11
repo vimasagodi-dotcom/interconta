@@ -213,6 +213,9 @@ export default async function handler(req: any, res: any) {
     }
 
     // 5. Obter Totais Mensais Oficiais da AT (revela todas as faturas e totais por mês, sem limite de 300)
+    const startDate = new Date(dataInicio || `${new Date().getFullYear()}-01-01`);
+    const endDate = new Date(dataFim || `${new Date().getFullYear()}-12-31`);
+
     let totaisMensais: Array<{ mes: string; numFaturas: number; baseTributavel: number; valorIva: number; total: number }> = [];
     const targetYear = startDate.getFullYear() || new Date().getFullYear();
 
