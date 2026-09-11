@@ -16,6 +16,7 @@ import FaturacaoPage from "@/pages/FaturacaoPage";
 import DefinicoesPage from "@/pages/DefinicoesPage";
 import PortalPage from "@/pages/PortalPage";
 import SafTPage from "@/pages/SafTPage";
+import EFaturaPage from "@/pages/EFaturaPage";
 import PortalContaPage from "@/pages/PortalContaPage";
 import PortalDocumentosPage from "@/pages/PortalDocumentosPage";
 import PortalMensagensPage from "@/pages/PortalMensagensPage";
@@ -65,6 +66,7 @@ const ProtectedRoutes = () => {
         {/* <Route path="/agenda" element={<AgendaPage />} /> */}
         <Route path="/faturacao" element={<FaturacaoPage />} />
         <Route path="/saft" element={<SafTPage />} />
+        <Route path="/efatura" element={<EFaturaPage />} />
         {/* <Route path="/agenda" element={<AgendaPage />} /> */}
         <Route path="/definicoes" element={<DefinicoesPage />} />
 

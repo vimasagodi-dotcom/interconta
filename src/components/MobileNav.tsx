@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { 
   Menu, LayoutDashboard, Users, ClipboardList, FileText, Receipt, 
-  FileBarChart, MessageSquare, Building2, LogOut, FileSearch2, Settings 
+  FileBarChart, MessageSquare, Building2, LogOut, FileSearch2, FileSpreadsheet, Settings 
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,6 +18,7 @@ const adminNavItems = [
   { to: "/documentos", label: "Documentos", icon: FileText },
   { to: "/faturacao", label: "Faturação", icon: Receipt },
   { to: "/saft", label: "SAF-T", icon: FileSearch2 },
+  { to: "/efatura", label: "e-Fatura", icon: FileSpreadsheet },
 ];
 
 const clientNavItems = [

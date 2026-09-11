@@ -16,6 +16,7 @@ import {
   FileBarChart,
   Settings,
   FileSearch2,
+  FileSpreadsheet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -28,6 +29,7 @@ const adminNavItems = [
   { to: "/documentos", label: "Documentos", icon: FileText },
   { to: "/faturacao", label: "Faturação", icon: Receipt },
   { to: "/saft", label: "SAF-T", icon: FileSearch2 },
+  { to: "/efatura", label: "e-Fatura", icon: FileSpreadsheet },
 ];
 
 const clientNavItems = [
