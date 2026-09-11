@@ -180,6 +180,9 @@ const EFaturaPage = () => {
       }
 
       setIsAuthenticated(true);
+      if (data.companyName) {
+        setNomeEmpresa(data.companyName);
+      }
       toast.success(data.message || "Sessão e-Fatura validada com sucesso na AT! Pode agora descarregar o Excel.");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Falha na autenticação.";
@@ -370,6 +373,10 @@ const EFaturaPage = () => {
 
       if (!response.ok || !resData.success) {
         throw new Error(resData.error || "Não foi possível autenticar ou obter dados da AT.");
+      }
+
+      if (resData.companyName) {
+        setNomeEmpresa(resData.companyName);
       }
 
       const allInvoices: ExtractedInvoice[] = resData.invoices || [];
