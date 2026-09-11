@@ -256,105 +256,118 @@ export default async function handler(req: any, res: any) {
         .replace(/&amp;/gi, '&');
     };
 
+    const classesToQuery = targetTipo === 'vendas' ? ['SI', 'PY'] : [''];
+
     for (const interval of intervals) {
-      let jsonEndpoint = '';
-      if (targetTipo === 'vendas') {
-        const q = new URLSearchParams({
-          dataInicioFilter: interval.start,
-          dataFimFilter: interval.end,
-          semRecibosVerdesFilter: 'N',
-        });
-        jsonEndpoint = `https://faturas.portaldasfinancas.gov.pt/json/obterDocumentosEmitente.action?${q.toString()}`;
-      } else {
-        const q = new URLSearchParams({
-          dataInicioFilter: interval.start,
-          dataFimFilter: interval.end,
-        });
-        jsonEndpoint = `https://faturas.portaldasfinancas.gov.pt/json/obterDocumentosAdquirente.action?${q.toString()}`;
-      }
-
-      try {
-        const atRes = await fetch(jsonEndpoint, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json, text/javascript, */*; q=0.01',
-            'X-Requested-With': 'XMLHttpRequest',
-            'Referer': `https://faturas.portaldasfinancas.gov.pt/${actionName}`,
-            'Cookie': getCookieHeader(faturasCookies),
-          },
-        });
-
-        if (!atRes.ok) continue;
-
-        const atData = await atRes.json();
-        const linhas = atData?.linhas || [];
-
-        for (const item of linhas) {
-          const docId = String(item.idDocumento || item.numerodocumento || Math.random());
-          if (seenDocs.has(docId)) continue;
-          seenDocs.add(docId);
-
-          const baseTributavel = typeof item.valorTotalBaseTributavel === 'number'
-            ? item.valorTotalBaseTributavel
-            : parseFloat(item.valorTotalBaseTributavel || 0);
-
-          const valorIva = typeof item.valorTotalIva === 'number'
-            ? item.valorTotalIva
-            : parseFloat(item.valorTotalIva || 0);
-
-          const total = typeof item.valorTotal === 'number'
-            ? item.valorTotal
-            : parseFloat(item.valorTotal || 0);
-
-          // Taxa de IVA aproximada calculada
-          let taxaIva = '23%';
-          if (baseTributavel > 0) {
-            const ratio = valorIva / baseTributavel;
-            if (ratio < 0.09) taxaIva = '6%';
-            else if (ratio < 0.18) taxaIva = '13%';
-            else taxaIva = '23%';
-          }
-
-          if (targetTipo === 'vendas') {
-            allInvoices.push({
-              nifEmitente: cleanNif,
-              nomeEmitente: decodeEntities(companyName || 'Empresa Emitente'),
-              nifAdquirente: String(item.nifAdquirente || ''),
-              nomeAdquirente: decodeEntities(item.nomeAdquirente || `Contribuinte NIF ${item.nifAdquirente || ''}`),
-              tipoDoc: item.tipoDocumento || 'FT',
-              numeroDoc: item.numerodocumento || '',
-              dataEmissao: item.dataEmissaoDocumento || '',
-              dataRegisto: item.dataEmissaoDocumento || '',
-              atcud: item.atcud || '',
-              baseTributavel: Math.round(baseTributavel * 100) / 100,
-              taxaIva,
-              valorIva: Math.round(valorIva * 100) / 100,
-              total: Math.round(total * 100) / 100,
-              estado: item.estadoBeneficioDescEmitente || item.estadoBeneficioDesc || 'Comunicada',
-              setor: item.actividadeEmitenteDesc ? decodeEntities(item.actividadeEmitenteDesc) : 'Vendas e Serviços Prestados',
-            });
-          } else {
-            allInvoices.push({
-              nifEmitente: String(item.nifEmitente || ''),
-              nomeEmitente: decodeEntities(item.nomeEmitente || `Emitente NIF ${item.nifEmitente || ''}`),
-              nifAdquirente: cleanNif,
-              nomeAdquirente: decodeEntities(companyName || `Empresa NIF ${cleanNif}`),
-              tipoDoc: item.tipoDocumento || 'FT',
-              numeroDoc: item.numerodocumento || '',
-              dataEmissao: item.dataEmissaoDocumento || '',
-              dataRegisto: item.dataEmissaoDocumento || '',
-              atcud: item.atcud || '',
-              baseTributavel: Math.round(baseTributavel * 100) / 100,
-              taxaIva,
-              valorIva: Math.round(valorIva * 100) / 100,
-              total: Math.round(total * 100) / 100,
-              estado: item.estadoBeneficioDesc || 'Registado',
-              setor: item.actividadeEmitenteDesc ? decodeEntities(item.actividadeEmitenteDesc) : 'Geral',
-            });
-          }
+      for (const cls of classesToQuery) {
+        let jsonEndpoint = '';
+        if (targetTipo === 'vendas') {
+          const q = new URLSearchParams({
+            classeDocumentoFilter: cls,
+            dataInicioFilter: interval.start,
+            dataFimFilter: interval.end,
+            semRecibosVerdesFilter: 'N',
+          });
+          jsonEndpoint = `https://faturas.portaldasfinancas.gov.pt/json/obterDocumentosEmitente.action?${q.toString()}`;
+        } else {
+          const q = new URLSearchParams({
+            dataInicioFilter: interval.start,
+            dataFimFilter: interval.end,
+          });
+          jsonEndpoint = `https://faturas.portaldasfinancas.gov.pt/json/obterDocumentosAdquirente.action?${q.toString()}`;
         }
-      } catch (intervalErr) {
-        console.warn(`Aviso ao extrair intervalo ${interval.start} a ${interval.end}:`, intervalErr);
+
+        try {
+          const atRes = await fetch(jsonEndpoint, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'application/json, text/javascript, */*; q=0.01',
+              'X-Requested-With': 'XMLHttpRequest',
+              'Referer': `https://faturas.portaldasfinancas.gov.pt/${actionName}`,
+              'Cookie': getCookieHeader(faturasCookies),
+            },
+          });
+
+          if (!atRes.ok) continue;
+
+          const atData = await atRes.json();
+          const linhas = atData?.linhas || [];
+
+          for (const item of linhas) {
+            const docId = String(item.idDocumento || item.numerodocumento || Math.random());
+            if (seenDocs.has(docId)) continue;
+            seenDocs.add(docId);
+
+            // A AT devolve valores monetários inteiros em cêntimos (ex: 36000 cêntimos = 360.00 €)
+            const rawBase = typeof item.valorTotalBaseTributavel === 'number'
+              ? item.valorTotalBaseTributavel
+              : parseFloat(item.valorTotalBaseTributavel || 0);
+
+            const rawIva = typeof item.valorTotalIva === 'number'
+              ? item.valorTotalIva
+              : parseFloat(item.valorTotalIva || 0);
+
+            const rawTotal = typeof item.valorTotal === 'number'
+              ? item.valorTotal
+              : parseFloat(item.valorTotal || 0);
+
+            const baseTributavel = Math.round((rawBase / 100) * 100) / 100;
+            const valorIva = Math.round((rawIva / 100) * 100) / 100;
+            const total = Math.round((rawTotal / 100) * 100) / 100;
+
+            // Taxa de IVA aproximada calculada
+            let taxaIva = '23%';
+            if (baseTributavel > 0) {
+              const ratio = valorIva / baseTributavel;
+              if (ratio < 0.04) taxaIva = '0%';
+              else if (ratio < 0.09) taxaIva = '6%';
+              else if (ratio < 0.18) taxaIva = '13%';
+              else taxaIva = '23%';
+            } else if (valorIva === 0) {
+              taxaIva = 'Isento / 0%';
+            }
+
+            if (targetTipo === 'vendas') {
+              allInvoices.push({
+                nifEmitente: cleanNif,
+                nomeEmitente: decodeEntities(companyName || 'Empresa Emitente'),
+                nifAdquirente: String(item.nifAdquirente || ''),
+                nomeAdquirente: decodeEntities(item.nomeAdquirente || `Cliente NIF ${item.nifAdquirente || 'Final'}`),
+                tipoDoc: item.tipoDocumentoDesc || item.tipoDocumento || 'FT',
+                numeroDoc: item.numerodocumento || '',
+                dataEmissao: item.dataEmissaoDocumento || '',
+                dataRegisto: item.dataEmissaoDocumento || '',
+                atcud: item.atcud || '',
+                baseTributavel,
+                taxaIva,
+                valorIva,
+                total,
+                estado: item.estadoBeneficioDescEmitente || item.estadoBeneficioDesc || 'Comunicada',
+                setor: item.actividadeEmitenteDesc ? decodeEntities(item.actividadeEmitenteDesc) : 'Vendas / Serviços',
+              });
+            } else {
+              allInvoices.push({
+                nifEmitente: String(item.nifEmitente || ''),
+                nomeEmitente: decodeEntities(item.nomeEmitente || `Fornecedor NIF ${item.nifEmitente || ''}`),
+                nifAdquirente: cleanNif,
+                nomeAdquirente: decodeEntities(companyName || `Empresa NIF ${cleanNif}`),
+                tipoDoc: item.tipoDocumentoDesc || item.tipoDocumento || 'FT',
+                numeroDoc: item.numerodocumento || '',
+                dataEmissao: item.dataEmissaoDocumento || '',
+                dataRegisto: item.dataEmissaoDocumento || '',
+                atcud: item.atcud || '',
+                baseTributavel,
+                taxaIva,
+                valorIva,
+                total,
+                estado: item.estadoBeneficioDesc || 'Registado',
+                setor: item.actividadeEmitenteDesc ? decodeEntities(item.actividadeEmitenteDesc) : 'Geral',
+              });
+            }
+          }
+        } catch (intervalErr) {
+          console.warn(`Aviso ao extrair intervalo ${interval.start} a ${interval.end}:`, intervalErr);
+        }
       }
     }
 
