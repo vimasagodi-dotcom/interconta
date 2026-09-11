@@ -79,6 +79,18 @@ export default async function handler(req: any, res: any) {
     saveCookies(formRes.headers);
     const formHtml = await formRes.text();
 
+    // Extrair dados e atributos do formulário
+    let attributes: Record<string, string> = {
+      path: actionName,
+      partID: 'EFPF',
+    };
+    const attrMatch = formHtml.match(/<script id="data-attributes" type="application\/json">([^<]*)<\/script>/);
+    if (attrMatch && attrMatch[1]) {
+      try {
+        attributes = JSON.parse(attrMatch[1]);
+      } catch {}
+    }
+
     // Extrair token CSRF
     const csrfMatch = formHtml.match(/token:\s*[`'"]([^`'"]+)[`'"]/);
     const csrfToken = csrfMatch ? csrfMatch[1] : '';
@@ -95,14 +107,25 @@ export default async function handler(req: any, res: any) {
     const urlLoginRel = urlLoginMatch ? urlLoginMatch[1] : 'submissaoFormularioLogin';
     const postUrl = new URL(urlLoginRel, redirectUrl).toString();
 
-    const username = subutilizador ? `${nif}/${subutilizador}` : nif;
-    const postBody = new URLSearchParams({
-      username: username.trim(),
-      password: password.trim(),
-      _csrf: csrfToken,
-      selectedAuthMethod: 'N',
-      authVersion: '1',
-    });
+    let cleanNif = String(nif).replace(/\s+/g, '').trim();
+    let cleanSub = subutilizador ? String(subutilizador).trim() : '';
+    if (cleanNif.includes('/')) {
+      const parts = cleanNif.split('/');
+      cleanNif = parts[0];
+      if (!cleanSub && parts[1]) cleanSub = parts[1];
+    }
+
+    const username = cleanSub ? `${cleanNif}/${cleanSub}` : cleanNif;
+
+    const postBody = new URLSearchParams();
+    for (const [k, v] of Object.entries(attributes)) {
+      postBody.append(k, String(v));
+    }
+    postBody.append('selectedAuthMethod', 'N');
+    postBody.append('_csrf', csrfToken);
+    postBody.append('authVersion', '1');
+    postBody.append('username', username);
+    postBody.append('password', String(password).trim());
 
     const loginRes = await fetch(postUrl, {
       method: 'POST',
@@ -110,6 +133,7 @@ export default async function handler(req: any, res: any) {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Content-Type': 'application/x-www-form-urlencoded',
         'Referer': redirectUrl,
+        'Origin': 'https://www.acesso.gov.pt',
         'Cookie': getCookieHeader(),
       },
       body: postBody.toString(),
@@ -130,16 +154,59 @@ export default async function handler(req: any, res: any) {
       }
       return res.status(401).json({
         success: false,
-        error: `Erro de login na AT: ${errMsg}`,
+        error: `Erro de login na AT: ${errMsg}. Verifique se a palavra-passe pertence ao NIF indicado ou a um Subutilizador (ex: ${cleanNif}/1).`,
       });
     }
 
-    // Seguir redirecionamentos após login bem-sucedido
+    // Processar auto-submissão forwardParticipantForm (padrão SAML da AT)
+    if (loginHtml.includes('forwardParticipantForm')) {
+      const formTagMatch = loginHtml.match(/<form[^>]+id="forwardParticipantForm"[^>]*action="([^"]+)"/i);
+      const forwardAction = formTagMatch ? formTagMatch[1] : '';
+      const forwardUrl = forwardAction ? new URL(forwardAction, postUrl).toString() : '';
+
+      const inputMatches = [...loginHtml.matchAll(/<input[^>]+name="([^"]+)"[^>]+value="([^"]*)"/gi)];
+      const forwardBody = new URLSearchParams();
+      for (const m of inputMatches) {
+        forwardBody.append(m[1], m[2]);
+      }
+
+      if (forwardUrl) {
+        const forwardRes = await fetch(forwardUrl, {
+          method: 'POST',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Referer': postUrl,
+            'Cookie': getCookieHeader(),
+          },
+          body: forwardBody.toString(),
+          redirect: 'manual',
+        });
+        saveCookies(forwardRes.headers);
+
+        let fwdRedirect = forwardRes.headers.get('location');
+        let fwdCount = 0;
+        while (fwdRedirect && fwdCount < 5) {
+          fwdCount++;
+          const nextRes = await fetch(new URL(fwdRedirect, forwardUrl).toString(), {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Cookie': getCookieHeader(),
+            },
+            redirect: 'manual',
+          });
+          saveCookies(nextRes.headers);
+          fwdRedirect = nextRes.headers.get('location');
+        }
+      }
+    }
+
+    // Seguir redirecionamentos HTTP 302 habituais caso existam
     let currentRedirect = loginRes.headers.get('location');
     let redirectCount = 0;
     while (currentRedirect && redirectCount < 5) {
       redirectCount++;
-      const nextRes = await fetch(currentRedirect, {
+      const nextRes = await fetch(new URL(currentRedirect, postUrl).toString(), {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Cookie': getCookieHeader(),
@@ -148,6 +215,13 @@ export default async function handler(req: any, res: any) {
       });
       saveCookies(nextRes.headers);
       currentRedirect = nextRes.headers.get('location');
+    }
+
+    if (req.body?.validateOnly) {
+      return res.status(200).json({
+        success: true,
+        message: `Sessão e-Fatura validada com sucesso na AT (${username})!`,
+      });
     }
 
     // 4. Dividir o período em intervalos semanais (7 dias) para garantir que não ultrapassa o limite de 300 da AT
@@ -235,7 +309,7 @@ export default async function handler(req: any, res: any) {
 
             if (targetTipo === 'vendas') {
               allInvoices.push({
-                nifEmitente: nif,
+                nifEmitente: cleanNif,
                 nomeEmitente: 'Empresa Titular',
                 nifAdquirente: rowData['nif adquirente'] || cols[0] || '',
                 nomeAdquirente: rowData['nome adquirente'] || cols[1] || '',
@@ -255,7 +329,7 @@ export default async function handler(req: any, res: any) {
               allInvoices.push({
                 nifEmitente: rowData['nif emitente'] || cols[0] || '',
                 nomeEmitente: rowData['nome emitente'] || cols[1] || '',
-                nifAdquirente: nif,
+                nifAdquirente: cleanNif,
                 nomeAdquirente: 'Empresa Titular',
                 tipoDoc: rowData['tipo documento'] || cols[2] || 'FT',
                 numeroDoc: docNum,

@@ -139,8 +139,20 @@ const EFaturaPage = () => {
   // Autenticação direta no e-Fatura sem sair do site
   const handleAuthenticate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nif || nif.trim().length !== 9) {
-      toast.error("Por favor introduza um NIF válido de 9 dígitos.");
+
+    let cleanNif = nif.replace(/\s+/g, "").trim();
+    let cleanSub = subUtilizador ? subUtilizador.trim() : "";
+    if (cleanNif.includes("/")) {
+      const parts = cleanNif.split("/");
+      cleanNif = parts[0];
+      if (!cleanSub && parts[1]) {
+        cleanSub = parts[1];
+        setSubUtilizador(parts[1]);
+      }
+    }
+
+    if (!cleanNif || cleanNif.length !== 9) {
+      toast.error("Por favor introduza um NIF válido de 9 dígitos (ex: 508433797 ou 508433797/1).");
       return;
     }
     if (!senhaAt && !isAuthenticated) {
@@ -149,12 +161,32 @@ const EFaturaPage = () => {
     }
 
     setAuthLoading(true);
-    // Simulação e conexão segura no portal
-    setTimeout(() => {
+    try {
+      const res = await fetch("/api/efatura", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nif: cleanNif,
+          password: senhaAt,
+          subutilizador: cleanSub,
+          tipo,
+          validateOnly: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Erro de login na Autoridade Tributária.");
+      }
+
       setIsAuthenticated(true);
+      toast.success(data.message || "Sessão e-Fatura validada com sucesso na AT! Pode agora descarregar o Excel.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Falha na autenticação.";
+      toast.error(msg, { duration: 9000 });
+    } finally {
       setAuthLoading(false);
-      toast.success("Sessão e-Fatura autenticada com sucesso! Pode agora selecionar as datas e descarregar.");
-    }, 800);
+    }
   };
 
   // Cálculo de lotes de 7 dias para ultrapassar limite de 300 faturas
@@ -300,12 +332,19 @@ const EFaturaPage = () => {
       return;
     }
 
-    const activeNif = nif.trim();
+    let activeNif = nif.replace(/\s+/g, "").trim();
+    let activeSub = subUtilizador ? subUtilizador.trim() : "";
+    if (activeNif.includes("/")) {
+      const parts = activeNif.split("/");
+      activeNif = parts[0];
+      if (!activeSub && parts[1]) activeSub = parts[1];
+    }
+
     const activeNome = nomeEmpresa || (clients.find((c) => c.nif === activeNif)?.name || `Empresa NIF ${activeNif}`);
 
     setIsExtracting(true);
     setExtractionProgress(15);
-    setProgressMsg(`A autenticar na Autoridade Tributária com o NIF ${activeNif}...`);
+    setProgressMsg(`A autenticar na Autoridade Tributária com o utilizador ${activeSub ? `${activeNif}/${activeSub}` : activeNif}...`);
 
     try {
       const totalBatches = Math.max(batchIntervals.length, 1);
@@ -317,7 +356,7 @@ const EFaturaPage = () => {
         body: JSON.stringify({
           nif: activeNif,
           password: senhaAt,
-          subutilizador: subUtilizador?.trim(),
+          subutilizador: activeSub,
           tipo,
           dataInicio,
           dataFim,
@@ -531,15 +570,20 @@ const EFaturaPage = () => {
                   )}
                 </div>
                 <Input
-                  placeholder="Ex: 508433797"
+                  placeholder="Ex: 508433797 ou 508433797/1"
                   value={nif}
                   onChange={(e) => {
-                    setNif(e.target.value);
+                    const val = e.target.value;
+                    setNif(val);
+                    if (val.includes('/')) {
+                      const parts = val.split('/');
+                      if (parts[1]) setSubUtilizador(parts[1]);
+                    }
                     if (isAuthenticated) setIsAuthenticated(false);
                   }}
                   onBlur={handleNifBlur}
                   className="h-10 font-mono"
-                  maxLength={9}
+                  maxLength={25}
                   required
                 />
               </div>
@@ -581,6 +625,13 @@ const EFaturaPage = () => {
                   className="h-10"
                 />
               </div>
+            </div>
+
+            <div className="text-xs text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border flex items-start gap-2">
+              <span className="font-bold text-amber-600 shrink-0">💡 Nota AT:</span>
+              <span>
+                Se no Portal das Finanças acede através de um <strong>Subutilizador</strong> (ex: <code>1</code>, <code>0001</code> ou NIF do CC), certifique-se de indicar o número do Subutilizador. A senha deve ser a que foi atribuída a esse utilizador nas Finanças.
+              </span>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
