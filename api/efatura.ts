@@ -90,16 +90,21 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 3. Submeter credenciais ao acesso.gov.pt
+    // 3. Submeter credenciais ao endpoint de autenticação correto
+    const urlLoginMatch = formHtml.match(/urlLogin:\s*stringOrNull\(['"]([^'"]+)['"]\)/);
+    const urlLoginRel = urlLoginMatch ? urlLoginMatch[1] : 'submissaoFormularioLogin';
+    const postUrl = new URL(urlLoginRel, redirectUrl).toString();
+
     const username = subutilizador ? `${nif}/${subutilizador}` : nif;
     const postBody = new URLSearchParams({
       username: username.trim(),
-      password: password,
+      password: password.trim(),
       _csrf: csrfToken,
       selectedAuthMethod: 'N',
+      authVersion: '1',
     });
 
-    const loginRes = await fetch('https://www.acesso.gov.pt/v2/login', {
+    const loginRes = await fetch(postUrl, {
       method: 'POST',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
