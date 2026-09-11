@@ -105,6 +105,20 @@ const EFaturaPage = () => {
     }
   };
 
+  const handleNifBlur = async () => {
+    if (nif && nif.trim().length === 9) {
+      try {
+        const res = await fetch(`/api/nif?nif=${nif.trim()}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.name) {
+            setNomeEmpresa(data.name);
+          }
+        }
+      } catch {}
+    }
+  };
+
   const handleAnoChange = (selectedAno: string) => {
     setAno(selectedAno);
     setDataInicio(`${selectedAno}-01-01`);
@@ -281,36 +295,63 @@ const EFaturaPage = () => {
 
   // AÇÃO PRINCIPAL: Extrair e descarregar imediatamente o Excel (.xlsx)
   const handleDownloadExcel = async () => {
-    const activeNif = nif || "508433797";
-    const activeNome = nomeEmpresa || (clients.find((c) => c.nif === activeNif)?.name || "Empresa Titular");
+    if (!nif || !senhaAt) {
+      toast.error("Por favor preencha o NIF e a Senha de Acesso das Finanças no Passo 1.");
+      return;
+    }
+
+    const activeNif = nif.trim();
+    const activeNome = nomeEmpresa || (clients.find((c) => c.nif === activeNif)?.name || `Empresa NIF ${activeNif}`);
 
     setIsExtracting(true);
-    setExtractionProgress(10);
-    setProgressMsg(`A ligar à sessão do e-Fatura para o NIF ${activeNif}...`);
+    setExtractionProgress(15);
+    setProgressMsg(`A autenticar na Autoridade Tributária com o NIF ${activeNif}...`);
 
     try {
-      // Simulação do processamento dos lotes de 7 dias com atualização visual em tempo real
       const totalBatches = Math.max(batchIntervals.length, 1);
       
-      await new Promise((r) => setTimeout(r, 400));
-      setExtractionProgress(30);
-      setProgressMsg(`A analisar ${totalBatches} lotes semanais para contornar limite de 300 documentos...`);
+      // Chamada à API de extração direta e segura da AT
+      const response = await fetch("/api/efatura", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nif: activeNif,
+          password: senhaAt,
+          subutilizador: subUtilizador?.trim(),
+          tipo,
+          dataInicio,
+          dataFim,
+        }),
+      });
 
-      await new Promise((r) => setTimeout(r, 500));
       setExtractionProgress(60);
-      setProgressMsg(`A consolidar documentos de ${tipo.toUpperCase()} (${dataInicio} a ${dataFim})...`);
+      setProgressMsg(`A descarregar faturas de ${tipo.toUpperCase()} da AT em ${totalBatches} lotes semanais...`);
 
-      const allInvoices = generateBatchInvoices(activeNif, activeNome);
-      
-      await new Promise((r) => setTimeout(r, 400));
+      const resData = await response.json();
+
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error || "Não foi possível autenticar ou obter dados da AT.");
+      }
+
+      const allInvoices: ExtractedInvoice[] = resData.invoices || [];
+
+      if (allInvoices.length === 0) {
+        toast.info(
+          `Sessão autenticada na AT com sucesso, mas não foram encontradas faturas de ${tipo} emitidas neste período para o NIF ${activeNif}.`
+        );
+        setIsExtracting(false);
+        setProgressMsg("");
+        return;
+      }
+
       setExtractionProgress(85);
-      setProgressMsg(`A construir folha de cálculo Excel (.xlsx) com ${allInvoices.length} faturas...`);
+      setProgressMsg(`A consolidar ${allInvoices.length} faturas reais no ficheiro Excel (.xlsx)...`);
 
-      // 1. Carregar SheetJS dinamicamente a pedido para máxima rapidez do site
+      // 1. Carregar SheetJS dinamicamente
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
 
-      // Folha 1: Faturas Detalhadas
+      // Folha 1: Faturas Detalhadas da AT
       const rowsDetailed = allInvoices.map((inv) => ({
         "NIF Emitente": inv.nifEmitente,
         "Nome Emitente": inv.nomeEmitente,
@@ -332,10 +373,10 @@ const EFaturaPage = () => {
       const wsDetailed = XLSX.utils.json_to_sheet(rowsDetailed);
       XLSX.utils.book_append_sheet(wb, wsDetailed, "Faturas Detalhadas");
 
-      // Folha 2: Resumo Financeiro e IVA
-      const totalBase = allInvoices.reduce((acc, cur) => acc + cur.baseTributavel, 0);
-      const totalIva = allInvoices.reduce((acc, cur) => acc + cur.valorIva, 0);
-      const totalGlobal = allInvoices.reduce((acc, cur) => acc + cur.total, 0);
+      // Folha 2: Resumo Financeiro e Totais
+      const totalBase = allInvoices.reduce((acc, cur) => acc + (cur.baseTributavel || 0), 0);
+      const totalIva = allInvoices.reduce((acc, cur) => acc + (cur.valorIva || 0), 0);
+      const totalGlobal = allInvoices.reduce((acc, cur) => acc + (cur.total || 0), 0);
 
       const summaryRows = [
         { "Indicador": "NIF Empresa Titular", "Valor": activeNif },
@@ -344,7 +385,7 @@ const EFaturaPage = () => {
         { "Indicador": "Data Início", "Valor": dataInicio },
         { "Indicador": "Data Fim", "Valor": dataFim },
         { "Indicador": "Total de Lotes Semanais", "Valor": totalBatches },
-        { "Indicador": "Total de Documentos Extraídos", "Valor": allInvoices.length },
+        { "Indicador": "Total de Documentos Reais Extraídos", "Valor": allInvoices.length },
         { "Indicador": "Base Tributável Total (€)", "Valor": Math.round(totalBase * 100) / 100 },
         { "Indicador": "Total IVA (€)", "Valor": Math.round(totalIva * 100) / 100 },
         { "Indicador": "Total Global com IVA (€)", "Valor": Math.round(totalGlobal * 100) / 100 },
@@ -353,7 +394,7 @@ const EFaturaPage = () => {
       XLSX.utils.book_append_sheet(wb, wsSummary, "Resumo e Totais");
 
       // 2. DISPARAR DOWNLOAD IMEDIATO DO FICHEIRO EXCEL (.xlsx) NO NAVEGADOR
-      const fileName = `FATURAS_${tipo.toUpperCase()}_${activeNif}_${ano || "PERIODO"}.xlsx`;
+      const fileName = `FATURAS_${tipo.toUpperCase()}_${activeNif}_${ano || "AT"}.xlsx`;
       XLSX.writeFile(wb, fileName);
 
       setExtractedInvoices(allInvoices);
@@ -362,11 +403,11 @@ const EFaturaPage = () => {
       setIsExtracting(false);
 
       toast.success(
-        `Ficheiro "${fileName}" com ${allInvoices.length} faturas descarregado com sucesso para o seu computador!`
+        `Ficheiro "${fileName}" com ${allInvoices.length} faturas reais descarregado com sucesso!`
       );
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      toast.error(`Falha ao gerar ficheiro Excel: ${msg}`);
+      toast.error(`Falha na extração e-Fatura: ${msg}`);
       setIsExtracting(false);
       setProgressMsg("");
     }
@@ -481,7 +522,14 @@ const EFaturaPage = () => {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold text-foreground">NIF da Empresa / Contribuinte</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold text-foreground">NIF da Empresa / Contribuinte</Label>
+                  {nomeEmpresa && (
+                    <span className="text-[11px] font-medium text-emerald-600 truncate max-w-[160px]">
+                      {nomeEmpresa}
+                    </span>
+                  )}
+                </div>
                 <Input
                   placeholder="Ex: 508433797"
                   value={nif}
@@ -489,6 +537,7 @@ const EFaturaPage = () => {
                     setNif(e.target.value);
                     if (isAuthenticated) setIsAuthenticated(false);
                   }}
+                  onBlur={handleNifBlur}
                   className="h-10 font-mono"
                   maxLength={9}
                   required
