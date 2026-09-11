@@ -5,16 +5,10 @@ import {
   FileSpreadsheet,
   Download,
   Upload,
-  Calendar,
-  Building2,
-  Filter,
   CheckCircle2,
-  AlertTriangle,
-  Play,
   Copy,
   FileCode,
   Layers,
-  ArrowRight,
   TrendingUp,
   Receipt,
   FileCheck,
@@ -23,6 +17,12 @@ import {
   ExternalLink,
   ShieldAlert,
   Sliders,
+  Lock,
+  Eye,
+  EyeOff,
+  Sparkles,
+  KeyRound,
+  DownloadCloud,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +56,8 @@ const EFaturaPage = () => {
   const [selectedClientId, setSelectedClientId] = useState<string>("manual");
   const [nifEmpresa, setNifEmpresa] = useState<string>("");
   const [nomeEmpresa, setNomeEmpresa] = useState<string>("");
+  const [senhaAt, setSenhaAt] = useState<string>("");
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Configuracao da Extracao
   const [tipoMovimento, setTipoMovimento] = useState<"compras" | "vendas">("compras");
@@ -117,11 +119,84 @@ const EFaturaPage = () => {
     }
   };
 
+  const handleOpenEfaturaPortal = () => {
+    window.open("https://www.acesso.gov.pt/v2/login?skin=efatura", "_blank");
+    toast.info("A abrir o Portal das Finanças / e-Fatura numa nova janela...");
+  };
+
+  const loadDemoInvoices = () => {
+    const demoData: ExtractedInvoice[] = [
+      {
+        uid: "500000001_FT2025/1_2025-01-15",
+        nifEmitente: "501234567",
+        nomeEmitente: "EDP Comercial, S.A.",
+        nifAdquirente: nifEmpresa || "508433797",
+        nomeAdquirente: nomeEmpresa || "Interconta Gestão Lda",
+        tipoDocumento: "Fatura",
+        numeroDocumento: "FT EDP/2025/10492",
+        dataEmissao: "2025-01-15",
+        baseTributavel: 245.5,
+        totalIva: 56.47,
+        totalDocumento: 301.97,
+        situacao: "Certificado",
+        origemFicheiro: "demo_compras_janeiro.xlsx",
+      },
+      {
+        uid: "500000002_FT2025/2_2025-01-20",
+        nifEmitente: "502345678",
+        nomeEmitente: "MEO - Serviços de Comunicações, S.A.",
+        nifAdquirente: nifEmpresa || "508433797",
+        nomeAdquirente: nomeEmpresa || "Interconta Gestão Lda",
+        tipoDocumento: "Fatura",
+        numeroDocumento: "FT MEO/9821034",
+        dataEmissao: "2025-01-20",
+        baseTributavel: 89.9,
+        totalIva: 20.68,
+        totalDocumento: 110.58,
+        situacao: "Certificado",
+        origemFicheiro: "demo_compras_janeiro.xlsx",
+      },
+      {
+        uid: "500000003_FT2025/3_2025-02-05",
+        nifEmitente: "503456789",
+        nomeEmitente: "Staples Portugal, Lda",
+        nifAdquirente: nifEmpresa || "508433797",
+        nomeAdquirente: nomeEmpresa || "Interconta Gestão Lda",
+        tipoDocumento: "Fatura-Recibo",
+        numeroDocumento: "FR STP/5502",
+        dataEmissao: "2025-02-05",
+        baseTributavel: 130.0,
+        totalIva: 29.9,
+        totalDocumento: 159.9,
+        situacao: "Certificado",
+        origemFicheiro: "demo_compras_fevereiro.xlsx",
+      },
+      {
+        uid: "500000004_FT2025/4_2025-02-28",
+        nifEmitente: "504567890",
+        nomeEmitente: "Galp Power, S.A.",
+        nifAdquirente: nifEmpresa || "508433797",
+        nomeAdquirente: nomeEmpresa || "Interconta Gestão Lda",
+        tipoDocumento: "Fatura",
+        numeroDocumento: "FT GLP/2025/4412",
+        dataEmissao: "2025-02-28",
+        baseTributavel: 412.3,
+        totalIva: 94.83,
+        totalDocumento: 507.13,
+        situacao: "Certificado",
+        origemFicheiro: "demo_compras_fevereiro.xlsx",
+      },
+    ];
+
+    setInvoices(demoData);
+    setProcessedFiles(["demo_compras_janeiro.xlsx", "demo_compras_fevereiro.xlsx"]);
+    toast.success("Faturas de exemplo carregadas! Pode agora testar o botão 'Descarregar Excel Consolidado'.");
+  };
+
   const getPythonScriptCode = () => {
     return `import os
 import sys
 import time
-import argparse
 from datetime import datetime, timedelta
 
 # Extrator em Lote do e-Fatura AT (Gerado por Interconta)
@@ -131,7 +206,7 @@ def run():
         from playwright.sync_api import sync_playwright
     except ImportError:
         import subprocess
-        print("A instalar playwright e dependencias...")
+        print("A instalar playwright e dependencias necessarias...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "playwright", "pandas", "openpyxl"])
         subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
         from playwright.sync_api import sync_playwright
@@ -141,15 +216,17 @@ def run():
     end_date = datetime.strptime("${dataFim}", "%Y-%m-%d")
     delta = timedelta(days=${intervaloDias})
     nif = "${nifEmpresa}"
+    senha = "${senhaAt}"
     
     out_dir = os.path.abspath("./downloads_efatura")
     os.makedirs(out_dir, exist_ok=True)
     
-    print("=" * 60)
-    print("  INTERCONTA - EXTRATOR EM LOTE DO E-FATURA")
-    print(f"  Tipo: {tipo.upper()} | NIF: {nif or 'Nao especificado'}")
+    print("=" * 65)
+    print("  INTERCONTA - EXTRATOR EM LOTE DO E-FATURA (PORTAL DAS FINANCAS)")
+    print(f"  Tipo: {tipo.upper()} | NIF: {nif or 'Manual'}")
     print(f"  Periodo: {start_date.strftime('%d/%m/%Y')} a {end_date.strftime('%d/%m/%Y')}")
-    print("=" * 60)
+    print(f"  Pasta de Destino: {out_dir}")
+    print("=" * 65)
 
     downloaded = []
     with sync_playwright() as p:
@@ -157,11 +234,32 @@ def run():
         context = browser.new_context(accept_downloads=True)
         page = context.new_page()
 
-        # Login no Portal das Financas
+        # Login no Portal das Financas / Acesso Gov
+        print("\\nA abrir o portal de login do e-Fatura...")
         page.goto("https://www.acesso.gov.pt/v2/login?skin=efatura")
-        print("\\nEfetue o login no browser com Senha AT ou Chave Movel Digital...")
         
-        # Aguardar conclusao do login
+        # Preenchimento automatico se NIF e Senha foram configurados
+        if nif and senha:
+            print("A preencher credenciais AT automaticamente...")
+            try:
+                time.sleep(1)
+                for un_sel in ["#username", "input[name='username']", "#nif"]:
+                    if page.locator(un_sel).count() > 0:
+                        page.fill(un_sel, nif)
+                        break
+                for pw_sel in ["#password", "input[name='password']", "#passwordInput"]:
+                    if page.locator(pw_sel).count() > 0:
+                        page.fill(pw_sel, senha)
+                        break
+                for btn_sel in ["button[type='submit']", "#sbmt-login", "input[type='submit']"]:
+                    if page.locator(btn_sel).count() > 0:
+                        page.click(btn_sel)
+                        break
+            except Exception as e:
+                print(f"Aviso no preenchimento automatico: {e}")
+
+        print("A aguardar que a autenticacao seja concluida...")
+        # Aguardar que o utilizador faca login (timeout 120s)
         for _ in range(120):
             if "portaldasfinancas.gov.pt" in page.url.lower() and "login" not in page.url.lower():
                 break
@@ -170,6 +268,7 @@ def run():
         target_url = "https://faturas.portaldasfinancas.gov.pt/consultarDocumentosAdquirente.action" if tipo == "compras" \\
             else "https://faturas.portaldasfinancas.gov.pt/consultarDocumentosEmitente.action"
             
+        print(f"A aceder a seccao de {tipo.upper()}...")
         page.goto(target_url)
         time.sleep(2)
 
@@ -179,7 +278,7 @@ def run():
             s_str = cur_start.strftime("%Y-%m-%d")
             e_str = cur_end.strftime("%Y-%m-%d")
             
-            print(f"A extrair lote: {cur_start.strftime('%d-%m-%Y')} ate {cur_end.strftime('%d-%m-%Y')}...")
+            print(f"[Lote] A extrair de {cur_start.strftime('%d-%m-%Y')} a {cur_end.strftime('%d-%m-%Y')}...")
             try:
                 for sel in ["#dataInicio", "input[name='dataInicio']", "#dataEmissaoInicio"]:
                     if page.locator(sel).count() > 0 and page.locator(sel).is_visible():
@@ -196,8 +295,8 @@ def run():
                         break
                 time.sleep(2)
                 
-                # Exportar
-                for exp in ["a:has-text('Exportar')", "button:has-text('Exportar')", ".btn-export"]:
+                # Exportar para Excel / CSV
+                for exp in ["a:has-text('Exportar para Excel')", "a:has-text('Exportar')", "button:has-text('Exportar')", ".btn-export"]:
                     if page.locator(exp).count() > 0 and page.locator(exp).is_visible():
                         with page.expect_download(timeout=10000) as dl:
                             page.click(exp)
@@ -206,17 +305,29 @@ def run():
                         dest = os.path.join(out_dir, fname)
                         d.save_as(dest)
                         downloaded.append(dest)
-                        print(f"  [OK] Guardado: {fname}")
+                        print(f"  -> Sucesso! Ficheiro guardado: {fname}")
                         break
             except Exception as ex:
-                print(f"  [Aviso] Falha no lote: {ex}")
+                print(f"  -> Aviso no lote: {ex}")
                 
             cur_start = cur_end + timedelta(days=1)
             time.sleep(1.5)
 
         browser.close()
         
-    print(f"\\nConcluido! Foram descarregados {len(downloaded)} ficheiros para {out_dir}")
+    print(f"\\nExtracao finalizada! Total de ficheiros descarregados: {len(downloaded)}")
+    
+    # Consolidar em ficheiro unico
+    if downloaded:
+        try:
+            import pandas as pd
+            dfs = [pd.read_excel(f) if f.endswith('.xlsx') else pd.read_csv(f, sep=';', encoding='latin1') for f in downloaded]
+            combined = pd.concat(dfs, ignore_index=True).drop_duplicates()
+            final_name = os.path.join(out_dir, f"CONSOLIDADO_{tipo.upper()}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx")
+            combined.to_excel(final_name, index=False)
+            print(f"\\n[FICHEIRO UNICO GERADO]: {final_name}")
+        except Exception as e:
+            print(f"Aviso na consolidacao automatica: {e}")
 
 if __name__ == "__main__":
     run()
@@ -245,33 +356,40 @@ if __name__ == "__main__":
   };
 
   const handleDownloadBat = () => {
+    const scriptName = `extrator_efatura_${tipoMovimento}_${nifEmpresa || "empresa"}_${ano}.py`;
+    // Fazer download do .py e do .bat juntos
+    handleDownloadPythonScript();
+
     const batContent = `@echo off
 chcp 65001 >nul
 title Interconta - Extrator e-Fatura AT
-echo =========================================================
-echo       INTERCONTA - EXTRATOR EM LOTE DO E-FATURA
-echo =========================================================
+echo ====================================================================
+echo                 INTERCONTA - EXTRATOR E-FATURA AT
+echo ====================================================================
 echo.
+echo A verificar o Python no sistema...
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [ERRO] O Python nao esta instalado no sistema.
-    echo Por favor instale o Python em https://www.python.org marcando "Add to PATH".
+    echo [ERRO] O Python nao foi encontrado no PATH.
+    echo Por favor instale o Python atraves de https://www.python.org marcando "Add to PATH".
     pause
     exit /b 1
 )
 
-echo A verificar dependencias do Playwright...
-pip install playwright pandas openpyxl >nul 2>&1
+echo [OK] Python detetado. A verificar bibliotecas necessarias...
+pip install playwright pandas openpyxl requests >nul 2>&1
 python -m playwright install chromium >nul 2>&1
 
 echo.
-echo A iniciar extrator para ${tipoMovimento.toUpperCase()} (${dataInicio} a ${dataFim})...
-python "extrator_efatura_${tipoMovimento}_${nifEmpresa || "empresa"}_${ano}.py"
+echo A iniciar a extracao automatica para ${tipoMovimento.toUpperCase()} (${dataInicio} ate ${dataFim})...
+echo O navegador abrira no Portal das Financas para efetuar/confirmar o login.
+echo.
+python "${scriptName}"
 
 echo.
-echo =========================================================
-echo  Extração finalizada com sucesso!
-echo =========================================================
+echo ====================================================================
+echo  Extracao terminada! Ficheiros guardados na pasta 'downloads_efatura'
+echo ====================================================================
 pause
 `;
     const blob = new Blob([batContent], { type: "text/plain;charset=utf-8;" });
@@ -282,10 +400,9 @@ pause
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success("Ficheiro .bat descarregado!");
+    toast.success("Ficheiro de execução (.bat) e Script (.py) descarregados com sucesso!");
   };
 
-  // Parser dos ficheiros descarregados do e-fatura
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -306,7 +423,6 @@ pause
 
         if (!jsonData || jsonData.length < 2) continue;
 
-        // Tentar localizar a linha de cabeçalho
         let headerRowIndex = -1;
         for (let r = 0; r < Math.min(jsonData.length, 10); r++) {
           const row = jsonData[r];
@@ -330,7 +446,6 @@ pause
           String(h ?? "").trim().toLowerCase()
         );
 
-        // Mapear colunas
         const findCol = (keywords: string[]) =>
           headers.findIndex((h) => keywords.some((k) => h.includes(k)));
 
@@ -388,11 +503,8 @@ pause
         }
       }
 
-      // Remover duplicados pelo UID
       const deduplicatedMap = new Map<string, ExtractedInvoice>();
-      // Manter os já existentes
       invoices.forEach((inv) => deduplicatedMap.set(inv.uid, inv));
-      // Inserir os novos
       newInvoices.forEach((inv) => deduplicatedMap.set(inv.uid, inv));
 
       const consolidatedList = Array.from(deduplicatedMap.values());
@@ -418,7 +530,7 @@ pause
 
   const handleExportConsolidatedExcel = () => {
     if (invoices.length === 0) {
-      toast.error("Não existem faturas para exportar.");
+      toast.error("Não existem faturas para descarregar. Carregue ficheiros ou use o exemplo.");
       return;
     }
 
@@ -441,7 +553,6 @@ pause
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Faturas Consolidadas");
 
-    // Ajustar largura das colunas
     const colWidths = [
       { wch: 14 },
       { wch: 28 },
@@ -458,9 +569,9 @@ pause
     ];
     worksheet["!cols"] = colWidths;
 
-    const exportFileName = `CONSOLIDADO_EFATURA_${tipoMovimento.toUpperCase()}_${nifEmpresa || "GERAL"}_${ano}.xlsx`;
+    const exportFileName = `FATURAS_${tipoMovimento.toUpperCase()}_${nifEmpresa || "CONSOLIDADO"}_${ano}.xlsx`;
     XLSX.writeFile(workbook, exportFileName);
-    toast.success(`Ficheiro Excel descarregado: ${exportFileName}`);
+    toast.success(`Ficheiro descarregado com sucesso: ${exportFileName}`);
   };
 
   // Estatísticas calculadas
@@ -491,36 +602,55 @@ pause
 
   return (
     <div className="flex flex-col h-full space-y-6 p-6">
-      {/* Page Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5 bg-card/50 p-5 rounded-xl border">
+      {/* Page Header com Ações Rápidas em Destaque */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border pb-5 bg-card/70 p-6 rounded-2xl border shadow-sm backdrop-blur-sm">
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 text-primary">
-            <FileSpreadsheet className="w-6 h-6" />
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center border border-primary/20 text-primary shrink-0 shadow-sm">
+            <FileSpreadsheet className="w-7 h-7" />
           </div>
           <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-foreground">Extrator & Consolidador e-Fatura</h1>
-              <Badge variant="outline" className="bg-primary/5 text-primary border-primary/30 text-xs">
-                Portal AT (Portugal)
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="text-2xl font-bold text-foreground tracking-tight">Extrator e-Fatura (AT)</h1>
+              <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 font-medium">
+                Portal Autoridade Tributária
               </Badge>
-              <Badge variant="secondary" className="text-xs bg-muted text-muted-foreground">
-                Anti-Bloqueio 300 docs
+              <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">
+                Sem Limite de 300 Documentos
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Extração em lote de faturas de compras ou vendas por períodos semanais e consolidação num único ficheiro Excel
+            <p className="text-sm text-muted-foreground mt-1">
+              Extração automatizada em lote de faturas de compras e vendas e consolidação num único ficheiro Excel.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Botões Principais no Topo */}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            onClick={handleOpenEfaturaPortal}
+            className="gap-2 border-primary/30 hover:bg-primary/5 text-xs font-semibold h-10 shadow-sm"
+          >
+            <ExternalLink className="w-4 h-4 text-primary" />
+            Fazer Login no Portal e-Fatura
+          </Button>
+
+          <Button
+            onClick={handleDownloadBat}
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-10 shadow-sm"
+          >
+            <DownloadCloud className="w-4 h-4" />
+            Descarregar Extrator Automático (.bat)
+          </Button>
+
           {invoices.length > 0 && (
             <Button
               onClick={handleExportConsolidatedExcel}
-              className="gap-2 shadow-sm font-medium"
+              variant="default"
+              className="gap-2 font-semibold h-10 shadow-sm"
             >
               <Download className="w-4 h-4" />
-              Exportar Excel Consolidado ({invoices.length})
+              Descarregar Faturas ({invoices.length})
             </Button>
           )}
         </div>
@@ -528,94 +658,62 @@ pause
 
       {/* Tabs */}
       <Tabs defaultValue="extrator" className="w-full space-y-6">
-        <TabsList className="grid grid-cols-3 w-full max-w-xl h-11 bg-muted/60 p-1 border">
-          <TabsTrigger value="extrator" className="flex items-center gap-2">
+        <TabsList className="grid grid-cols-3 w-full max-w-xl h-11 bg-muted/60 p-1 border rounded-xl">
+          <TabsTrigger value="extrator" className="flex items-center gap-2 rounded-lg font-medium">
             <Sliders className="w-4 h-4" />
-            Configurar Extração
+            1. Login & Extração em Lote
           </TabsTrigger>
-          <TabsTrigger value="consolidador" className="flex items-center gap-2">
+          <TabsTrigger value="consolidador" className="flex items-center gap-2 rounded-lg font-medium">
             <Layers className="w-4 h-4" />
-            Consolidador ({invoices.length})
+            2. Faturas & Download ({invoices.length})
           </TabsTrigger>
-          <TabsTrigger value="script" className="flex items-center gap-2">
+          <TabsTrigger value="script" className="flex items-center gap-2 rounded-lg font-medium">
             <FileCode className="w-4 h-4" />
-            Script Playwright
+            3. Código Playwright
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: Configurar Extração em Lote */}
+        {/* TAB 1: Login & Configuração da Extração */}
         <TabsContent value="extrator" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Coluna Esquerda: Definições */}
+            {/* Coluna Esquerda: Autenticação + Parâmetros */}
             <div className="lg:col-span-2 space-y-6">
-              <div className="bg-card border border-border rounded-xl p-6 space-y-6 shadow-sm">
-                <div className="border-b border-border pb-4">
-                  <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-                    <Receipt className="w-4 h-4 text-primary" />
-                    Parâmetros do Lote e-Fatura
-                  </h2>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Configure os documentos a extrair e o período. Os lotes fragmentados contornam o teto oficial de 300 documentos da AT.
-                  </p>
-                </div>
-
-                {/* Tipo de Documento */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">Tipo de Documentos Pretendidos</Label>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div
-                      onClick={() => setTipoMovimento("compras")}
-                      className={`cursor-pointer rounded-lg border-2 p-4 flex flex-col gap-1 transition-all ${
-                        tipoMovimento === "compras"
-                          ? "border-primary bg-primary/5 shadow-sm"
-                          : "border-border hover:border-muted-foreground/30 bg-background"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-sm text-foreground">
-                          Compras (Adquirente)
-                        </span>
-                        {tipoMovimento === "compras" && (
-                          <CheckCircle2 className="w-4 h-4 text-primary" />
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        Faturas de fornecedores recebidas com o NIF da empresa
-                      </span>
-                    </div>
-
-                    <div
-                      onClick={() => setTipoMovimento("vendas")}
-                      className={`cursor-pointer rounded-lg border-2 p-4 flex flex-col gap-1 transition-all ${
-                        tipoMovimento === "vendas"
-                          ? "border-primary bg-primary/5 shadow-sm"
-                          : "border-border hover:border-muted-foreground/30 bg-background"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold text-sm text-foreground">
-                          Vendas (Emitente)
-                        </span>
-                        {tipoMovimento === "vendas" && (
-                          <CheckCircle2 className="w-4 h-4 text-primary" />
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        Faturas e notas de crédito emitidas aos clientes
-                      </span>
-                    </div>
+              {/* CARD 1: Autenticação / Login no e-Fatura */}
+              <div className="bg-card border border-border rounded-2xl p-6 space-y-5 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border pb-4">
+                  <div>
+                    <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                      <KeyRound className="w-5 h-5 text-primary" />
+                      Autenticação no Portal das Finanças / e-Fatura
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Insira o NIF e a Senha de Acesso da AT para o extrator iniciar sessão automaticamente
+                    </p>
                   </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleOpenEfaturaPortal}
+                    className="text-primary hover:text-primary gap-1.5 text-xs h-8 px-2.5"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Abrir Página de Login Oficial
+                  </Button>
                 </div>
 
                 {/* Selecionar Cliente do Interconta */}
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">Empresa / Cliente do Interconta</Label>
+                <div className="space-y-2">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Empresa / Cliente do Gabinete
+                  </Label>
                   <Select value={selectedClientId} onValueChange={handleClientChange}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className="w-full h-10">
                       <SelectValue placeholder="Selecione um cliente..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="manual">-- Inserir NIF Manualmente --</SelectItem>
+                      <SelectItem value="manual">-- Inserir NIF / Credenciais Manualmente --</SelectItem>
                       {clients.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
                           {c.nome} {c.nif ? `(${c.nif})` : ""}
@@ -625,75 +723,151 @@ pause
                   </Select>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">NIF da Empresa</Label>
+                    <Label className="text-xs font-semibold text-foreground">NIF do Contribuinte / Empresa</Label>
                     <Input
-                      placeholder="Ex: 509123456"
+                      placeholder="Ex: 508433797"
                       value={nifEmpresa}
                       onChange={(e) => setNifEmpresa(e.target.value)}
+                      className="h-10 font-mono"
                     />
                   </div>
+
                   <div className="space-y-2">
-                    <Label className="text-sm font-medium">Nome / Razão Social</Label>
-                    <Input
-                      placeholder="Ex: Empresa Exemplo, Lda"
-                      value={nomeEmpresa}
-                      onChange={(e) => setNomeEmpresa(e.target.value)}
-                    />
+                    <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                      <span>Senha de Acesso AT (Finanças)</span>
+                      <span className="text-[10px] text-muted-foreground font-normal">Opcional se autenticar no browser</span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Insira a senha do Portal das Finanças"
+                        value={senhaAt}
+                        onChange={(e) => setSenhaAt(e.target.value)}
+                        className="h-10 pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-muted/40 rounded-xl text-xs text-muted-foreground flex items-start gap-2.5 border">
+                  <ShieldAlert className="w-4 h-4 text-primary shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-semibold text-foreground">Privacidade e Segurança: </span>
+                    As credenciais nunca são guardadas na nuvem nem saem do seu computador. O script Playwright é executado localmente na sua máquina e abre diretamente a página oficial da Autoridade Tributária.
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 2: Parâmetros de Extração */}
+              <div className="bg-card border border-border rounded-2xl p-6 space-y-6 shadow-sm">
+                <div className="border-b border-border pb-4">
+                  <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+                    <Receipt className="w-5 h-5 text-primary" />
+                    Parâmetros dos Documentos a Extrair
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Escolha entre Compras ou Vendas e defina o período temporal pretendido
+                  </p>
+                </div>
+
+                {/* Tipo de Documento */}
+                <div className="space-y-3">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Tipo de Faturas
+                  </Label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div
+                      onClick={() => setTipoMovimento("compras")}
+                      className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col gap-1.5 transition-all ${
+                        tipoMovimento === "compras"
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border hover:border-muted-foreground/30 bg-background"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm text-foreground">
+                          Compras (Adquirente)
+                        </span>
+                        {tipoMovimento === "compras" && (
+                          <CheckCircle2 className="w-4 h-4 text-primary" />
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground leading-relaxed">
+                        Faturas recebidas de fornecedores emitidas com o NIF da sua empresa
+                      </span>
+                    </div>
+
+                    <div
+                      onClick={() => setTipoMovimento("vendas")}
+                      className={`cursor-pointer rounded-xl border-2 p-4 flex flex-col gap-1.5 transition-all ${
+                        tipoMovimento === "vendas"
+                          ? "border-primary bg-primary/5 shadow-sm"
+                          : "border-border hover:border-muted-foreground/30 bg-background"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-sm text-foreground">
+                          Vendas (Emitente)
+                        </span>
+                        {tipoMovimento === "vendas" && (
+                          <CheckCircle2 className="w-4 h-4 text-primary" />
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground leading-relaxed">
+                        Faturas, faturas-recibo e notas de crédito emitidas aos seus clientes
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Período */}
                 <div className="space-y-3 pt-2 border-t border-border">
                   <div className="flex items-center justify-between">
-                    <Label className="text-sm font-medium">Intervalo de Datas</Label>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        type="button"
-                        variant={ano === "2026" ? "default" : "outline"}
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => handleAnoChange("2026")}
-                      >
-                        Ano 2026
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={ano === "2025" ? "default" : "outline"}
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => handleAnoChange("2025")}
-                      >
-                        Ano 2025
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={ano === "2024" ? "default" : "outline"}
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => handleAnoChange("2024")}
-                      >
-                        Ano 2024
-                      </Button>
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Ano Fiscal / Intervalo
+                    </Label>
+                    <div className="flex items-center gap-1.5">
+                      {["2026", "2025", "2024"].map((y) => (
+                        <Button
+                          key={y}
+                          type="button"
+                          variant={ano === y ? "default" : "outline"}
+                          size="sm"
+                          className="h-7 text-xs px-2.5"
+                          onClick={() => handleAnoChange(y)}
+                        >
+                          Ano {y}
+                        </Button>
+                      ))}
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label className="text-xs text-muted-foreground">Data Início</Label>
                       <Input
                         type="date"
                         value={dataInicio}
                         onChange={(e) => setDataInicio(e.target.value)}
+                        className="h-10"
                       />
                     </div>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <Label className="text-xs text-muted-foreground">Data Fim</Label>
                       <Input
                         type="date"
                         value={dataFim}
                         onChange={(e) => setDataFim(e.target.value)}
+                        className="h-10"
                       />
                     </div>
                   </div>
@@ -703,13 +877,15 @@ pause
                 <div className="space-y-3 pt-2 border-t border-border">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label className="text-sm font-medium">Estratégia de Fragmentação (Anti-Limite AT)</Label>
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Intervalo por Lote (Anti-Bloqueio AT)
+                      </Label>
                       <p className="text-xs text-muted-foreground">
-                        A AT bloqueia exportações superiores a 300 documentos por pedido
+                        A AT trunca exportações superiores a 300 documentos por pedido
                       </p>
                     </div>
-                    <Badge variant="outline" className="text-xs border-success/30 text-success bg-success/5">
-                      Recomendado: 7 Dias
+                    <Badge variant="outline" className="text-xs border-success/40 text-success bg-success/5 font-semibold">
+                      Semanal (Recomendado)
                     </Badge>
                   </div>
 
@@ -735,50 +911,50 @@ pause
               </div>
             </div>
 
-            {/* Coluna Direita: Painel de Lançamento */}
+            {/* Coluna Direita: Caixa de Download & Ações Imediatas */}
             <div className="space-y-6">
-              <div className="bg-card border border-border rounded-xl p-6 space-y-6 shadow-sm">
+              <div className="bg-card border-2 border-primary/20 rounded-2xl p-6 space-y-6 shadow-sm">
                 <div>
-                  <h3 className="text-base font-semibold text-foreground">Resumo da Extração</h3>
+                  <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                    <DownloadCloud className="w-5 h-5 text-primary" />
+                    Descarregar Extrator
+                  </h3>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Parâmetros validados para o extrator Playwright
+                    Gera o extrator configurado pronto a correr com duplo clique no seu computador
                   </p>
                 </div>
 
-                <div className="space-y-3 bg-muted/40 p-4 rounded-lg text-xs space-y-2.5">
+                {/* Resumo do Lote */}
+                <div className="bg-muted/40 p-4 rounded-xl text-xs space-y-2.5 border">
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Tipo de Faturas:</span>
-                    <span className="font-semibold capitalize text-foreground">{tipoMovimento}</span>
+                    <span className="text-muted-foreground">Tipo de Movimento:</span>
+                    <span className="font-bold uppercase text-foreground">{tipoMovimento}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Empresa:</span>
-                    <span className="font-semibold text-foreground truncate max-w-[150px]">
-                      {nomeEmpresa || (nifEmpresa ? `NIF ${nifEmpresa}` : "Geral")}
+                    <span className="text-muted-foreground">NIF da Empresa:</span>
+                    <span className="font-mono font-semibold text-foreground">
+                      {nifEmpresa || "Manual no Browser"}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Período:</span>
+                    <span className="text-muted-foreground">Período Selecionado:</span>
                     <span className="font-semibold text-foreground">
                       {dataInicio} a {dataFim}
                     </span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Janela por lote:</span>
-                    <span className="font-semibold text-foreground">{intervaloDias} dias</span>
-                  </div>
                   <div className="flex justify-between border-t border-border pt-2">
-                    <span className="text-muted-foreground">Lotes calculados:</span>
+                    <span className="text-muted-foreground">Lotes Calculados:</span>
                     <Badge variant="secondary" className="font-bold">
-                      {calcularNumeroLotes()} lotes
+                      {calcularNumeroLotes()} pedidos semanais
                     </Badge>
                   </div>
                 </div>
 
-                <div className="space-y-3">
+                {/* Botões de Ação Destacados */}
+                <div className="space-y-3 pt-1">
                   <Button
                     onClick={handleDownloadBat}
-                    className="w-full gap-2 shadow-sm font-semibold"
-                    size="lg"
+                    className="w-full gap-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-12 shadow-sm text-sm"
                   >
                     <Download className="w-4 h-4" />
                     Descarregar Executável (.bat)
@@ -787,53 +963,55 @@ pause
                   <Button
                     onClick={handleDownloadPythonScript}
                     variant="outline"
-                    className="w-full gap-2"
+                    className="w-full gap-2 h-10 text-xs font-semibold"
                   >
-                    <FileCode className="w-4 h-4" />
+                    <FileCode className="w-4 h-4 text-primary" />
                     Descarregar Script Python (.py)
                   </Button>
 
                   <Button
-                    onClick={handleCopyCode}
+                    onClick={handleOpenEfaturaPortal}
                     variant="ghost"
-                    className="w-full gap-2 text-xs"
+                    className="w-full gap-2 text-xs h-9 border border-border/80"
                   >
-                    <Copy className="w-3.5 h-3.5" />
-                    Copiar Código do Script
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Fazer Login no e-Fatura Manualmente
                   </Button>
                 </div>
 
-                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-600 dark:text-amber-400 flex items-start gap-2">
-                  <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>
-                    O login é 100% assistido e seguro: abre a janela oficial da AT no seu computador para autenticar com Senha AT ou Chave Móvel Digital.
-                  </span>
+                <div className="p-3 bg-muted/40 rounded-xl text-[11px] text-muted-foreground space-y-1">
+                  <p className="font-semibold text-foreground">Como funciona:</p>
+                  <ol className="list-decimal list-inside space-y-0.5 text-muted-foreground">
+                    <li>Descarregue o <code>.bat</code> com o botão verde acima.</li>
+                    <li>Dê duplo clique no ficheiro descarregado.</li>
+                    <li>O Chromium abre a página da AT para autenticação e descarrega todos os lotes para Excel!</li>
+                  </ol>
                 </div>
               </div>
             </div>
           </div>
         </TabsContent>
 
-        {/* TAB 2: Consolidador de Faturas */}
+        {/* TAB 2: Faturas Consolidadas & Download */}
         <TabsContent value="consolidador" className="space-y-6">
           {/* Métricas */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
                 <Receipt className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total Faturas</p>
-                <h3 className="text-xl font-bold text-foreground">{totalFaturas}</h3>
+                <p className="text-xs text-muted-foreground font-medium">Total Faturas</p>
+                <h3 className="text-2xl font-bold text-foreground">{totalFaturas}</h3>
               </div>
             </div>
 
             <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500">
+              <div className="w-11 h-11 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
                 <TrendingUp className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Base Tributável</p>
+                <p className="text-xs text-muted-foreground font-medium">Base Tributável</p>
                 <h3 className="text-xl font-bold text-foreground">
                   {totalBase.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
                 </h3>
@@ -841,11 +1019,11 @@ pause
             </div>
 
             <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+              <div className="w-11 h-11 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500">
                 <FileCheck className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total IVA</p>
+                <p className="text-xs text-muted-foreground font-medium">Total IVA</p>
                 <h3 className="text-xl font-bold text-foreground">
                   {totalIva.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
                 </h3>
@@ -853,11 +1031,11 @@ pause
             </div>
 
             <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex items-center gap-4">
-              <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-500">
+              <div className="w-11 h-11 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500">
                 <Layers className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Total Líquido c/ IVA</p>
+                <p className="text-xs text-muted-foreground font-medium">Total com IVA</p>
                 <h3 className="text-xl font-bold text-foreground">
                   {totalGeral.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
                 </h3>
@@ -865,8 +1043,8 @@ pause
             </div>
           </div>
 
-          {/* Zona de Drop / Upload */}
-          <div className="bg-card border-2 border-dashed border-border hover:border-primary/50 transition-colors rounded-xl p-8 text-center space-y-4">
+          {/* Zona de Drop / Upload e Ações */}
+          <div className="bg-card border-2 border-dashed border-border hover:border-primary/50 transition-colors rounded-2xl p-8 text-center space-y-4">
             <input
               type="file"
               ref={fileInputRef}
@@ -875,38 +1053,60 @@ pause
               onChange={handleFileUpload}
               className="hidden"
             />
-            <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-              <Upload className="w-6 h-6" />
+            <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shadow-sm">
+              <Upload className="w-7 h-7" />
             </div>
             <div>
-              <h3 className="text-base font-semibold text-foreground">
+              <h3 className="text-base font-bold text-foreground">
                 Carregar Ficheiros do e-Fatura (.xlsx, .xls, .csv)
               </h3>
-              <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                Arraste todos os ficheiros semanais ou mensais exportados pelo e-Fatura. A ferramenta remove automaticamente duplicados e junta tudo num único relatório.
+              <p className="text-xs text-muted-foreground mt-1 max-w-lg mx-auto">
+                Arraste os ficheiros descarregados pelo extrator ou carregue um lote de faturas. A aplicação junta tudo, elimina duplicados e calcula os totais de impostos.
               </p>
             </div>
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <Button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isProcessing}
-                className="gap-2"
+                className="gap-2 font-semibold h-10"
               >
                 {isProcessing ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
                   <Upload className="w-4 h-4" />
                 )}
-                {isProcessing ? "A processar..." : "Selecionar Ficheiros em Lote"}
+                {isProcessing ? "A processar..." : "Carregar Ficheiros em Lote"}
               </Button>
-              {invoices.length > 0 && (
+
+              {invoices.length === 0 ? (
                 <Button
                   variant="outline"
+                  onClick={loadDemoInvoices}
+                  className="gap-2 border-primary/20 hover:bg-primary/5 text-xs h-10"
+                >
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  Carregar Faturas de Demonstração
+                </Button>
+              ) : (
+                <Button
+                  variant="default"
+                  onClick={handleExportConsolidatedExcel}
+                  className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold h-10"
+                >
+                  <Download className="w-4 h-4" />
+                  Descarregar Excel Consolidado ({invoices.length})
+                </Button>
+              )}
+
+              {invoices.length > 0 && (
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     setInvoices([]);
                     setProcessedFiles([]);
                     toast.info("Lista de faturas limpa.");
                   }}
+                  className="text-xs h-10 text-muted-foreground"
                 >
                   Limpar Dados
                 </Button>
@@ -923,88 +1123,101 @@ pause
           </div>
 
           {/* Tabela de Faturas */}
-          <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm space-y-4 p-4">
+          <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm space-y-4 p-5">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="relative w-full max-w-xs">
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-muted-foreground" />
+              <div className="relative w-full max-w-sm">
+                <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
                 <Input
-                  placeholder="Pesquisar por NIF, Nome, Documento..."
+                  placeholder="Pesquisar por NIF, Fornecedor, Documento..."
                   value={searchTerm}
                   onChange={(e) => {
                     setSearchTerm(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="pl-9 h-9 text-xs"
+                  className="pl-9 h-10 text-xs"
                 />
               </div>
 
               {invoices.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Button
-                    variant="outline"
+                    variant="default"
                     size="sm"
                     onClick={handleExportConsolidatedExcel}
-                    className="gap-1.5 text-xs h-8"
+                    className="gap-2 text-xs h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
                   >
                     <Download className="w-3.5 h-3.5" />
-                    Descarregar Excel Consolidado
+                    Descarregar Faturas em Excel (.xlsx)
                   </Button>
                 </div>
               )}
             </div>
 
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto border rounded-xl">
               <table className="w-full text-xs text-left">
-                <thead className="bg-muted/50 text-muted-foreground uppercase text-[10px] tracking-wider border-y">
+                <thead className="bg-muted/60 text-muted-foreground uppercase text-[10px] tracking-wider border-b">
                   <tr>
-                    <th className="py-2.5 px-3">Data</th>
-                    <th className="py-2.5 px-3">Tipo</th>
-                    <th className="py-2.5 px-3">Nº Documento</th>
-                    <th className="py-2.5 px-3">Emitente (Fornecedor)</th>
-                    <th className="py-2.5 px-3">Adquirente (Cliente)</th>
-                    <th className="py-2.5 px-3 text-right">Base (€)</th>
-                    <th className="py-2.5 px-3 text-right">IVA (€)</th>
-                    <th className="py-2.5 px-3 text-right">Total (€)</th>
+                    <th className="py-3 px-3.5">Data</th>
+                    <th className="py-3 px-3.5">Tipo</th>
+                    <th className="py-3 px-3.5">Nº Documento</th>
+                    <th className="py-3 px-3.5">Emitente (Fornecedor)</th>
+                    <th className="py-3 px-3.5">Adquirente (Cliente)</th>
+                    <th className="py-3 px-3.5 text-right">Base (€)</th>
+                    <th className="py-3 px-3.5 text-right">IVA (€)</th>
+                    <th className="py-3 px-3.5 text-right">Total (€)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {paginatedInvoices.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                        {invoices.length === 0
-                          ? "Nenhum ficheiro carregado ainda. Utilize o botão acima para carregar ficheiros do e-Fatura."
-                          : "Nenhuma fatura encontrada com os filtros atuais."}
+                      <td colSpan={8} className="py-10 text-center text-muted-foreground">
+                        {invoices.length === 0 ? (
+                          <div className="space-y-2">
+                            <p>Nenhuma fatura carregada ainda.</p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={loadDemoInvoices}
+                              className="text-xs gap-1.5"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-primary" />
+                              Carregar Faturas de Demonstração
+                            </Button>
+                          </div>
+                        ) : (
+                          "Nenhuma fatura encontrada com os filtros atuais."
+                        )}
                       </td>
                     </tr>
                   ) : (
                     paginatedInvoices.map((inv) => (
                       <tr key={inv.uid} className="hover:bg-muted/30 transition-colors">
-                        <td className="py-2.5 px-3 font-medium text-foreground whitespace-nowrap">
+                        <td className="py-2.5 px-3.5 font-medium text-foreground whitespace-nowrap">
                           {inv.dataEmissao}
                         </td>
-                        <td className="py-2.5 px-3">
+                        <td className="py-2.5 px-3.5">
                           <Badge variant="outline" className="text-[10px] py-0 px-1.5 font-normal">
                             {inv.tipoDocumento}
                           </Badge>
                         </td>
-                        <td className="py-2.5 px-3 font-mono font-medium text-foreground whitespace-nowrap">
+                        <td className="py-2.5 px-3.5 font-mono font-medium text-foreground whitespace-nowrap">
                           {inv.numeroDocumento}
                         </td>
-                        <td className="py-2.5 px-3 max-w-[200px] truncate" title={`${inv.nomeEmitente} (${inv.nifEmitente})`}>
+                        <td className="py-2.5 px-3.5 max-w-[200px] truncate" title={`${inv.nomeEmitente} (${inv.nifEmitente})`}>
                           <div className="font-medium text-foreground truncate">{inv.nomeEmitente || inv.nifEmitente}</div>
                           <div className="text-[10px] text-muted-foreground font-mono">{inv.nifEmitente}</div>
                         </td>
-                        <td className="py-2.5 px-3 max-w-[200px] truncate" title={`${inv.nomeAdquirente} (${inv.nifAdquirente})`}>
+                        <td className="py-2.5 px-3.5 max-w-[200px] truncate" title={`${inv.nomeAdquirente} (${inv.nifAdquirente})`}>
                           <div className="font-medium text-foreground truncate">{inv.nomeAdquirente || inv.nifAdquirente}</div>
                           <div className="text-[10px] text-muted-foreground font-mono">{inv.nifAdquirente}</div>
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono">
+                        <td className="py-2.5 px-3.5 text-right font-mono">
                           {inv.baseTributavel.toLocaleString("pt-PT", { minimumFractionDigits: 2 })} €
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-emerald-600 dark:text-emerald-400">
+                        <td className="py-2.5 px-3.5 text-right font-mono text-emerald-600 dark:text-emerald-400">
                           {inv.totalIva.toLocaleString("pt-PT", { minimumFractionDigits: 2 })} €
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono font-semibold text-foreground">
+                        <td className="py-2.5 px-3.5 text-right font-mono font-semibold text-foreground">
                           {inv.totalDocumento.toLocaleString("pt-PT", { minimumFractionDigits: 2 })} €
                         </td>
                       </tr>
@@ -1025,19 +1238,19 @@ pause
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 text-xs"
+                    className="h-8 text-xs"
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   >
                     Anterior
                   </Button>
-                  <span className="px-2 font-medium text-foreground">
+                  <span className="px-2.5 font-medium text-foreground">
                     {currentPage} / {totalPages}
                   </span>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-7 text-xs"
+                    className="h-8 text-xs"
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   >
@@ -1051,70 +1264,37 @@ pause
 
         {/* TAB 3: Script & Assistente Playwright */}
         <TabsContent value="script" className="space-y-6">
-          <div className="bg-card border border-border rounded-xl p-6 space-y-6 shadow-sm">
+          <div className="bg-card border border-border rounded-2xl p-6 space-y-6 shadow-sm">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-4">
               <div>
-                <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
                   <FileCode className="w-5 h-5 text-primary" />
                   Script de Automação Playwright (Python)
                 </h3>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Script pronto a correr no seu computador, baseado na sua configuração atual de {tipoMovimento} ({ano})
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Script pronto com as datas selecionadas ({tipoMovimento.toUpperCase()} de {ano})
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={handleCopyCode} className="gap-1.5 text-xs">
+                <Button variant="outline" size="sm" onClick={handleCopyCode} className="gap-1.5 text-xs h-9">
                   <Copy className="w-3.5 h-3.5" />
                   Copiar Código
                 </Button>
-                <Button size="sm" onClick={handleDownloadPythonScript} className="gap-1.5 text-xs">
+                <Button size="sm" onClick={handleDownloadPythonScript} className="gap-1.5 text-xs h-9">
                   <Download className="w-3.5 h-3.5" />
                   Descarregar .py
                 </Button>
               </div>
             </div>
 
-            {/* Passo a Passo */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-              <div className="p-3.5 rounded-lg border bg-muted/30 space-y-1.5">
-                <div className="font-semibold text-foreground flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px]">1</span>
-                  Descarregar
-                </div>
-                <p className="text-muted-foreground">
-                  Descarregue o ficheiro <code>.py</code> ou o ficheiro <code>.bat</code> para a sua pasta de trabalho.
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-lg border bg-muted/30 space-y-1.5">
-                <div className="font-semibold text-foreground flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px]">2</span>
-                  Executar & Autenticar
-                </div>
-                <p className="text-muted-foreground">
-                  Dê duplo clique no <code>.bat</code>. O navegador abrirá na página oficial da AT para autenticar-se.
-                </p>
-              </div>
-
-              <div className="p-3.5 rounded-lg border bg-muted/30 space-y-1.5">
-                <div className="font-semibold text-foreground flex items-center gap-1.5">
-                  <span className="w-5 h-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px]">3</span>
-                  Consolidação
-                </div>
-                <p className="text-muted-foreground">
-                  O script descarrega todos os lotes e consolida tudo num único ficheiro Excel limpo e pronto a usar.
-                </p>
-              </div>
-            </div>
-
             {/* Code Block */}
-            <div className="relative rounded-lg overflow-hidden border border-border bg-muted/40">
-              <div className="flex items-center justify-between px-4 py-2 bg-muted/80 border-b border-border text-[11px] text-muted-foreground font-mono">
+            <div className="relative rounded-xl overflow-hidden border border-border bg-muted/40">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-muted/80 border-b border-border text-[11px] text-muted-foreground font-mono">
                 <span>extrator_efatura_{tipoMovimento}.py</span>
                 <span className="text-primary font-semibold">Playwright + Sync API</span>
               </div>
-              <pre className="p-4 text-xs font-mono text-foreground overflow-x-auto max-h-[400px]">
+              <pre className="p-4 text-xs font-mono text-foreground overflow-x-auto max-h-[420px]">
                 <code>{getPythonScriptCode()}</code>
               </pre>
             </div>
