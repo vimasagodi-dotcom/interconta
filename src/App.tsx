@@ -20,6 +20,7 @@ const DefinicoesPage = lazy(() => import("@/pages/DefinicoesPage"));
 const PortalPage = lazy(() => import("@/pages/PortalPage"));
 const SafTPage = lazy(() => import("@/pages/SafTPage"));
 const EFaturaPage = lazy(() => import("@/pages/EFaturaPage"));
+const WhatsAppPage = lazy(() => import("@/pages/WhatsAppPage"));
 const PortalContaPage = lazy(() => import("@/pages/PortalContaPage"));
 const PortalDocumentosPage = lazy(() => import("@/pages/PortalDocumentosPage"));
 const PortalMensagensPage = lazy(() => import("@/pages/PortalMensagensPage"));
@@ -70,6 +71,7 @@ const ProtectedRoutes = () => {
         <Route path="/faturacao" element={<FaturacaoPage />} />
         <Route path="/saft" element={<SafTPage />} />
         <Route path="/efatura" element={<EFaturaPage />} />
+        <Route path="/whatsapp" element={<WhatsAppPage />} />
         {/* <Route path="/agenda" element={<AgendaPage />} /> */}
         <Route path="/definicoes" element={<DefinicoesPage />} />
 

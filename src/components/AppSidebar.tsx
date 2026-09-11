@@ -17,6 +17,7 @@ import {
   Settings,
   FileSearch2,
   FileSpreadsheet,
+  MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -30,6 +31,7 @@ const adminNavItems = [
   { to: "/faturacao", label: "Faturação", icon: Receipt },
   { to: "/saft", label: "SAF-T", icon: FileSearch2 },
   { to: "/efatura", label: "e-Fatura", icon: FileSpreadsheet },
+  { to: "/whatsapp", label: "WhatsApp", icon: MessageCircle },
 ];
 
 const clientNavItems = [
