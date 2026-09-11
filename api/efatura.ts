@@ -257,11 +257,11 @@ export default async function handler(req: any, res: any) {
     const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
     let sliceStepDays = 7;
     if (totalDays <= 31) {
-      sliceStepDays = 5; // Período de 1 mês: lotes de 5 dias
+      sliceStepDays = 1; // Período de 1 mês: dia a dia para recolher o máximo absoluto de documentos sem teto
     } else if (totalDays <= 93) {
-      sliceStepDays = 7; // Período de 1 trimestre: lotes de 7 dias
+      sliceStepDays = 4; // Período de 1 trimestre: lotes de 4 dias
     } else {
-      sliceStepDays = 14; // Período anual: lotes de 14 dias (26 lotes) para caber no timeout do Vercel
+      sliceStepDays = 14; // Período anual: lotes de 14 dias
     }
 
     const intervals: Array<{ start: string; end: string }> = [];
@@ -419,6 +419,23 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    // 7. Calcular o resumo oficial certificado da AT para o período selecionado
+    let certifiedSummary = null;
+    if (totaisMensais.length > 0) {
+      const sMonth = (dataInicio || '').substring(0, 7);
+      const eMonth = (dataFim || '').substring(0, 7);
+      const matchingMonths = totaisMensais.filter(m => m.mes >= sMonth && m.mes <= eMonth);
+      if (matchingMonths.length > 0) {
+        certifiedSummary = {
+          numFaturas: matchingMonths.reduce((s, m) => s + (m.numFaturas || 0), 0),
+          baseTributavel: Math.round(matchingMonths.reduce((s, m) => s + (m.baseTributavel || 0), 0) * 100) / 100,
+          valorIva: Math.round(matchingMonths.reduce((s, m) => s + (m.valorIva || 0), 0) * 100) / 100,
+          total: Math.round(matchingMonths.reduce((s, m) => s + (m.total || 0), 0) * 100) / 100,
+          months: matchingMonths,
+        };
+      }
+    }
+
     return res.status(200).json({
       success: true,
       companyName,
@@ -427,6 +444,7 @@ export default async function handler(req: any, res: any) {
       count: allInvoices.length,
       invoices: allInvoices,
       totaisMensais,
+      certifiedSummary,
     });
   } catch (error: any) {
     console.error('Erro na extração e-Fatura:', error);

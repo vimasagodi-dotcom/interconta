@@ -76,6 +76,14 @@ const EFaturaPage = () => {
   const [extractionProgress, setExtractionProgress] = useState<number>(0);
   const [progressMsg, setProgressMsg] = useState<string>("");
   const [extractedInvoices, setExtractedInvoices] = useState<ExtractedInvoice[]>([]);
+  const [certifiedSummary, setCertifiedSummary] = useState<{
+    numFaturas: number;
+    baseTributavel: number;
+    valorIva: number;
+    total: number;
+    months?: any[];
+  } | null>(null);
+  const [totaisMensaisAt, setTotaisMensaisAt] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
@@ -385,6 +393,16 @@ const EFaturaPage = () => {
 
       if (resData.companyName) {
         setNomeEmpresa(resData.companyName);
+      }
+
+      if (resData.certifiedSummary) {
+        setCertifiedSummary(resData.certifiedSummary);
+      } else {
+        setCertifiedSummary(null);
+      }
+
+      if (Array.isArray(resData.totaisMensais)) {
+        setTotaisMensaisAt(resData.totaisMensais);
       }
 
       const allInvoices: ExtractedInvoice[] = resData.invoices || [];
@@ -964,10 +982,10 @@ const EFaturaPage = () => {
               <div>
                 <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                  Resumo da Extração Concluída ({extractedInvoices.length} Faturas)
+                  Resumo da Extração Concluída {certifiedSummary ? `(${certifiedSummary.numFaturas.toLocaleString("pt-PT")} Faturas Certificadas AT)` : `(${extractedInvoices.length} Faturas)`}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Ficheiro Excel gerado com sucesso. Veja abaixo o resumo financeiro dos documentos.
+                  Ficheiro Excel gerado e descarregado com sucesso. Veja abaixo os valores oficiais e o detalhe dos documentos.
                 </p>
               </div>
 
@@ -982,39 +1000,140 @@ const EFaturaPage = () => {
               </Button>
             </div>
 
-            {/* Cartões Financeiros */}
+            {/* Aviso Informativo dos Totais Oficiais da AT */}
+            {certifiedSummary && (
+              <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-950 dark:text-emerald-200 text-xs space-y-1">
+                <div className="flex items-center gap-2 font-bold text-sm text-emerald-800 dark:text-emerald-300">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  Totais 100% Certificados pela Autoridade Tributária (AT)
+                </div>
+                <p>
+                  O seu ficheiro Excel inclui na folha <strong>"Totais Mensais AT"</strong> a totalidade oficial certificada pela AT ({certifiedSummary.numFaturas.toLocaleString("pt-PT")} documentos no valor global de {certifiedSummary.total.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}).
+                  Na folha <strong>"Faturas Detalhadas"</strong> constam os {extractedInvoices.length.toLocaleString("pt-PT")} documentos individuais extraídos via consulta web (a AT impõe um teto de 300 documentos por pedido na pesquisa web).
+                </p>
+              </div>
+            )}
+
+            {/* Cartões Financeiros Oficiais */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-muted/30 border border-border rounded-xl p-4">
-                <span className="text-xs text-muted-foreground font-medium">Total de Documentos</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground font-medium">Total de Faturas</span>
+                  {certifiedSummary ? (
+                    <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                      Certificado AT
+                    </span>
+                  ) : (
+                    <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                      Detalhe
+                    </span>
+                  )}
+                </div>
                 <p className="text-2xl font-bold text-foreground mt-1">
-                  {extractedInvoices.length} <span className="text-xs font-normal text-muted-foreground">docs</span>
+                  {(certifiedSummary ? certifiedSummary.numFaturas : extractedInvoices.length).toLocaleString("pt-PT")}{" "}
+                  <span className="text-xs font-normal text-muted-foreground">docs</span>
+                </p>
+                {certifiedSummary && certifiedSummary.numFaturas !== extractedInvoices.length && (
+                  <p className="text-[11px] text-muted-foreground mt-1 font-medium">
+                    {extractedInvoices.length.toLocaleString("pt-PT")} docs na listagem detalhada
+                  </p>
+                )}
+              </div>
+
+              <div className="bg-muted/30 border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground font-medium">Base Tributável</span>
+                  {certifiedSummary && (
+                    <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                      Oficial AT
+                    </span>
+                  )}
+                </div>
+                <p className="text-2xl font-bold text-foreground mt-1">
+                  {(certifiedSummary ? certifiedSummary.baseTributavel : totalValorBase).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
                 </p>
               </div>
 
               <div className="bg-muted/30 border border-border rounded-xl p-4">
-                <span className="text-xs text-muted-foreground font-medium">Base Tributável Total</span>
-                <p className="text-2xl font-bold text-foreground mt-1">
-                  {totalValorBase.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
-                </p>
-              </div>
-
-              <div className="bg-muted/30 border border-border rounded-xl p-4">
-                <span className="text-xs text-muted-foreground font-medium">Total IVA</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground font-medium">Total IVA</span>
+                  {certifiedSummary && (
+                    <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                      Oficial AT
+                    </span>
+                  )}
+                </div>
                 <p className="text-2xl font-bold text-emerald-600 mt-1">
-                  {totalValorIva.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                  {(certifiedSummary ? certifiedSummary.valorIva : totalValorIva).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
                 </p>
               </div>
 
               <div className="bg-muted/30 border border-border rounded-xl p-4">
-                <span className="text-xs text-muted-foreground font-medium">Total Global com IVA</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground font-medium">Total Global com IVA</span>
+                  {certifiedSummary && (
+                    <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                      Certificado AT
+                    </span>
+                  )}
+                </div>
                 <p className="text-2xl font-bold text-foreground mt-1">
-                  {totalValorFinal.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
+                  {(certifiedSummary ? certifiedSummary.total : totalValorFinal).toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}
                 </p>
               </div>
             </div>
 
-            {/* Tabela de Amostra */}
-            <div className="space-y-3">
+            {/* Tabela dos Totais Mensais Oficiais da AT */}
+            {totaisMensaisAt.length > 0 && (
+              <div className="space-y-2.5 pt-2 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs uppercase font-bold text-foreground flex items-center gap-2">
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                    Totais Mensais Oficiais da AT ({totaisMensaisAt.reduce((s, r) => s + (r.numFaturas || 0), 0).toLocaleString("pt-PT")} Faturas Certificadas no Ano)
+                  </h4>
+                  <span className="text-[11px] text-muted-foreground font-medium">Folha "Totais Mensais AT" no ficheiro Excel</span>
+                </div>
+                <div className="border border-border rounded-xl overflow-hidden overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-muted/60 text-muted-foreground uppercase font-semibold text-[11px] border-b border-border">
+                      <tr>
+                        <th className="px-3 py-2">Ano / Mês</th>
+                        <th className="px-3 py-2 text-right">Nº Faturas Entregues</th>
+                        <th className="px-3 py-2 text-right">Base Tributável (€)</th>
+                        <th className="px-3 py-2 text-right">IVA (€)</th>
+                        <th className="px-3 py-2 text-right">Total Oficial (€)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border font-medium">
+                      {totaisMensaisAt.map((tm, idx) => {
+                        const isCurrent = tm.mes === (dataInicio || '').substring(0, 7);
+                        return (
+                          <tr key={idx} className={isCurrent ? "bg-emerald-500/10 font-bold text-emerald-950 dark:text-emerald-300" : "hover:bg-muted/30"}>
+                            <td className="px-3 py-2">
+                              {tm.mes} {isCurrent && <Badge variant="outline" className="ml-2 text-[10px] bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300">Período Selecionado</Badge>}
+                            </td>
+                            <td className="px-3 py-2 text-right">{tm.numFaturas.toLocaleString("pt-PT")} docs</td>
+                            <td className="px-3 py-2 text-right">{tm.baseTributavel.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</td>
+                            <td className="px-3 py-2 text-right text-emerald-600">{tm.valorIva.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</td>
+                            <td className="px-3 py-2 text-right">{tm.total.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Tabela de Amostra Detalhada */}
+            <div className="space-y-3 pt-2 border-t border-border">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs uppercase font-bold text-foreground flex items-center gap-2">
+                  <Layers className="w-4 h-4 text-emerald-600" />
+                  Listagem Detalhada de Faturas (Amostra Web da AT)
+                </h4>
+                <span className="text-[11px] text-muted-foreground font-medium">Folha "Faturas Detalhadas" no ficheiro Excel</span>
+              </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="relative flex-1 max-w-sm">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
