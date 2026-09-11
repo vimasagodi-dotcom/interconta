@@ -221,12 +221,12 @@ const EFaturaPage = () => {
         invoiceDay.setDate(invoiceDay.getDate() + (i % 6));
 
         const dataEmissaoStr = invoiceDay.toISOString().split("T")[0];
-        const docTipo = tiposDoc[Math.floor(Math.random() * (i % 5 === 0 ? 4 : 2))];
-        const docNum = `${docTipo} ${ano}/${String((batchIdx * 10) + i + 1).padStart(5, "0")}`;
+        const tipoDoc = tiposDoc[Math.floor(Math.random() * (i % 5 === 0 ? 4 : 2))];
+        const docNum = `${tipoDoc} ${ano}/${String((batchIdx * 10) + i + 1).padStart(5, "0")}`;
         const atcud = `AT-${ano.slice(-2)}-${Math.random().toString(36).substring(2, 7).toUpperCase()}-${String(i + 1).padStart(4, "0")}`;
 
         let base = Math.round((Math.random() * 450 + 25) * 100) / 100;
-        if (docTipo === "NC") {
+        if (tipoDoc === "NC") {
           base = -Math.abs(base);
         }
 
@@ -330,7 +330,7 @@ const EFaturaPage = () => {
       }));
 
       const wsDetailed = XLSX.utils.json_to_sheet(rowsDetailed);
-      XLSX.utils.book_append_sheet(wb, wsDetailed, "Faturas Extraídas");
+      XLSX.utils.book_append_sheet(wb, wsDetailed, "Faturas Detalhadas");
 
       // Folha 2: Resumo Financeiro e IVA
       const totalBase = allInvoices.reduce((acc, cur) => acc + cur.baseTributavel, 0);
