@@ -73,16 +73,16 @@ const EFaturaPage = () => {
   const itemsPerPage = 15;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Apenas Admin e Colaborador podem aceder
-  if (user?.role === "cliente") {
-    return <Navigate to="/portal" replace />;
-  }
-
   useEffect(() => {
     fetchClients().then((data) => {
       setClients(data);
     });
   }, []);
+
+  // Apenas Admin e Colaborador podem aceder
+  if (user?.role === "cliente") {
+    return <Navigate to="/portal" replace />;
+  }
 
   const handleClientChange = (clientId: string) => {
     setSelectedClientId(clientId);
@@ -302,16 +302,16 @@ pause
         const workbook = XLSX.read(data, { type: "array" });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-        const jsonData = XLSX.utils.sheet_to_json<any>(worksheet, { header: 1 });
+        const jsonData = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1 });
 
         if (!jsonData || jsonData.length < 2) continue;
 
         // Tentar localizar a linha de cabeçalho
         let headerRowIndex = -1;
         for (let r = 0; r < Math.min(jsonData.length, 10); r++) {
-          const row = jsonData[r] as any[];
+          const row = jsonData[r];
           if (!row) continue;
-          const rowStr = row.map((c) => String(c).toLowerCase()).join(" ");
+          const rowStr = row.map((c) => String(c ?? "").toLowerCase()).join(" ");
           if (
             rowStr.includes("documento") ||
             rowStr.includes("emissão") ||
@@ -326,8 +326,8 @@ pause
 
         if (headerRowIndex === -1) headerRowIndex = 0;
 
-        const headers = (jsonData[headerRowIndex] as any[]).map((h) =>
-          String(h || "").trim().toLowerCase()
+        const headers = (jsonData[headerRowIndex] ?? []).map((h) =>
+          String(h ?? "").trim().toLowerCase()
         );
 
         // Mapear colunas
@@ -347,16 +347,16 @@ pause
         const colSituacao = findCol(["situação", "situacao", "estado"]);
 
         for (let r = headerRowIndex + 1; r < jsonData.length; r++) {
-          const row = jsonData[r] as any[];
+          const row = jsonData[r];
           if (!row || row.length === 0) continue;
 
-          const numDoc = colNumDoc !== -1 ? String(row[colNumDoc] || "").trim() : "";
-          const nifEmit = colNifEmitente !== -1 ? String(row[colNifEmitente] || "").trim() : "";
-          const dataEmissao = colData !== -1 ? String(row[colData] || "").trim() : "";
+          const numDoc = colNumDoc !== -1 ? String(row[colNumDoc] ?? "").trim() : "";
+          const nifEmit = colNifEmitente !== -1 ? String(row[colNifEmitente] ?? "").trim() : "";
+          const dataEmissao = colData !== -1 ? String(row[colData] ?? "").trim() : "";
 
           if (!numDoc && !nifEmit) continue;
 
-          const parseNum = (val: any) => {
+          const parseNum = (val: unknown) => {
             if (typeof val === "number") return val;
             if (!val) return 0;
             const clean = String(val).replace(/\s/g, "").replace(",", ".");
@@ -373,16 +373,16 @@ pause
           newInvoices.push({
             uid,
             nifEmitente: nifEmit,
-            nomeEmitente: colNomeEmitente !== -1 ? String(row[colNomeEmitente] || "").trim() : "",
-            nifAdquirente: colNifAdquirente !== -1 ? String(row[colNifAdquirente] || "").trim() : "",
-            nomeAdquirente: colNomeAdquirente !== -1 ? String(row[colNomeAdquirente] || "").trim() : "",
-            tipoDocumento: colTipoDoc !== -1 ? String(row[colTipoDoc] || "").trim() : "Fatura",
+            nomeEmitente: colNomeEmitente !== -1 ? String(row[colNomeEmitente] ?? "").trim() : "",
+            nifAdquirente: colNifAdquirente !== -1 ? String(row[colNifAdquirente] ?? "").trim() : "",
+            nomeAdquirente: colNomeAdquirente !== -1 ? String(row[colNomeAdquirente] ?? "").trim() : "",
+            tipoDocumento: colTipoDoc !== -1 ? String(row[colTipoDoc] ?? "").trim() : "Fatura",
             numeroDocumento: numDoc,
             dataEmissao: dataEmissao,
             baseTributavel: baseTributavel,
             totalIva: totalIva,
             totalDocumento: totalDoc,
-            situacao: colSituacao !== -1 ? String(row[colSituacao] || "").trim() : "Certificado",
+            situacao: colSituacao !== -1 ? String(row[colSituacao] ?? "").trim() : "Certificado",
             origemFicheiro: file.name,
           });
         }
@@ -404,9 +404,10 @@ pause
       toast.success(
         `Processamento concluído! ${newFileNames.length} ficheiros lidos. Total consolidado: ${consolidatedList.length} faturas (${novosAdicionados} novas adicionadas).`
       );
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erro ao processar ficheiros:", err);
-      toast.error(`Erro ao ler ficheiros: ${err?.message || "Formato não suportado"}`);
+      const errMsg = err instanceof Error ? err.message : "Formato não suportado";
+      toast.error(`Erro ao ler ficheiros: ${errMsg}`);
     } finally {
       setIsProcessing(false);
       if (fileInputRef.current) {
