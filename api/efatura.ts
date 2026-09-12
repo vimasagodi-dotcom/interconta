@@ -253,15 +253,15 @@ export default async function handler(req: any, res: any) {
     }
 
     // 6. Dividir o período em lotes dinâmicos para maximizar o número de faturas individuais
-    // Como a AT impõe teto de 300 documentos por pedido, fatiar em intervalos menores permite recolher muito mais documentos.
+    // A AT impõe teto de 300 documentos por pedido — fatiar em intervalos menores recolhe mais documentos.
     const totalDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
-    let sliceStepDays = 7;
+    let sliceStepDays: number;
     if (totalDays <= 31) {
-      sliceStepDays = 1; // Período de 1 mês: dia a dia para recolher o máximo absoluto de documentos sem teto
+      sliceStepDays = 1; // 1 mês: dia a dia (max 31 pedidos paralelos)
     } else if (totalDays <= 93) {
-      sliceStepDays = 4; // Período de 1 trimestre: lotes de 4 dias
+      sliceStepDays = 3; // trimestre: lotes de 3 dias
     } else {
-      sliceStepDays = 14; // Período anual: lotes de 14 dias
+      sliceStepDays = 7; // ano: lotes de 7 dias
     }
 
     const intervals: Array<{ start: string; end: string }> = [];
@@ -279,10 +279,7 @@ export default async function handler(req: any, res: any) {
       cur.setDate(cur.getDate() + sliceStepDays);
     }
 
-    // 6. Consultar endpoint JSON real da AT
-    const allInvoices: any[] = [];
-    const seenDocs = new Set<string>();
-
+    // Utilitário: decode HTML entities
     const decodeEntities = (str: string) => {
       if (!str) return '';
       return str
@@ -304,14 +301,14 @@ export default async function handler(req: any, res: any) {
         .replace(/&amp;/gi, '&');
     };
 
-    const classesToQuery = targetTipo === 'vendas' ? ['SI', 'PY'] : [''];
-
-    for (const interval of intervals) {
-      for (const cls of classesToQuery) {
-        let jsonEndpoint = '';
+    // Função que processa 1 intervalo de datas e devolve as linhas da AT
+    const fetchInterval = async (interval: { start: string; end: string }): Promise<any[]> => {
+      try {
+        let jsonEndpoint: string;
         if (targetTipo === 'vendas') {
+          // Usar classeDocumentoFilter vazio = devolve SI + PY + todos os tipos numa única query
           const q = new URLSearchParams({
-            classeDocumentoFilter: cls,
+            classeDocumentoFilter: '',
             dataInicioFilter: interval.start,
             dataFimFilter: interval.end,
             semRecibosVerdesFilter: 'N',
@@ -325,96 +322,106 @@ export default async function handler(req: any, res: any) {
           jsonEndpoint = `https://faturas.portaldasfinancas.gov.pt/json/obterDocumentosAdquirente.action?${q.toString()}`;
         }
 
-        try {
-          const atRes = await fetch(jsonEndpoint, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept': 'application/json, text/javascript, */*; q=0.01',
-              'X-Requested-With': 'XMLHttpRequest',
-              'Referer': `https://faturas.portaldasfinancas.gov.pt/${actionName}`,
-              'Cookie': getCookieHeader(faturasCookies),
-            },
-          });
+        const atRes = await fetch(jsonEndpoint, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Referer': `https://faturas.portaldasfinancas.gov.pt/${actionName}`,
+            'Cookie': getCookieHeader(faturasCookies),
+          },
+        });
 
-          if (!atRes.ok) continue;
+        if (!atRes.ok) return [];
+        const atData = await atRes.json();
+        return atData?.linhas || [];
+      } catch (e) {
+        console.warn(`Aviso ao extrair intervalo ${interval.start} a ${interval.end}:`, e);
+        return [];
+      }
+    };
 
-          const atData = await atRes.json();
-          const linhas = atData?.linhas || [];
+    // 7. Executar pedidos em paralelo (grupos de 8) para caber no timeout da Vercel
+    const allInvoices: any[] = [];
+    const seenDocs = new Set<string>();
+    const CONCURRENCY = 8;
 
-          for (const item of linhas) {
-            const docId = String(item.idDocumento || item.numerodocumento || Math.random());
-            if (seenDocs.has(docId)) continue;
-            seenDocs.add(docId);
+    for (let i = 0; i < intervals.length; i += CONCURRENCY) {
+      const chunk = intervals.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(chunk.map(fetchInterval));
 
-            // A AT devolve valores monetários inteiros em cêntimos (ex: 36000 cêntimos = 360.00 €)
-            const rawBase = typeof item.valorTotalBaseTributavel === 'number'
-              ? item.valorTotalBaseTributavel
-              : parseFloat(item.valorTotalBaseTributavel || 0);
+      for (const linhas of results) {
+        for (const item of linhas) {
+          const docId = String(item.idDocumento || item.numerodocumento || Math.random());
+          if (seenDocs.has(docId)) continue;
+          seenDocs.add(docId);
 
-            const rawIva = typeof item.valorTotalIva === 'number'
-              ? item.valorTotalIva
-              : parseFloat(item.valorTotalIva || 0);
+          // A AT devolve valores monetários em cêntimos (ex: 36000 cêntimos = 360.00 €)
+          const rawBase = typeof item.valorTotalBaseTributavel === 'number'
+            ? item.valorTotalBaseTributavel
+            : parseFloat(item.valorTotalBaseTributavel || 0);
 
-            const rawTotal = typeof item.valorTotal === 'number'
-              ? item.valorTotal
-              : parseFloat(item.valorTotal || 0);
+          const rawIva = typeof item.valorTotalIva === 'number'
+            ? item.valorTotalIva
+            : parseFloat(item.valorTotalIva || 0);
 
-            const baseTributavel = Math.round((rawBase / 100) * 100) / 100;
-            const valorIva = Math.round((rawIva / 100) * 100) / 100;
-            const total = Math.round((rawTotal / 100) * 100) / 100;
+          const rawTotal = typeof item.valorTotal === 'number'
+            ? item.valorTotal
+            : parseFloat(item.valorTotal || 0);
 
-            // Taxa de IVA aproximada calculada
-            let taxaIva = '23%';
-            if (baseTributavel > 0) {
-              const ratio = valorIva / baseTributavel;
-              if (ratio < 0.04) taxaIva = '0%';
-              else if (ratio < 0.09) taxaIva = '6%';
-              else if (ratio < 0.18) taxaIva = '13%';
-              else taxaIva = '23%';
-            } else if (valorIva === 0) {
-              taxaIva = 'Isento / 0%';
-            }
+          const baseTributavel = Math.round((rawBase / 100) * 100) / 100;
+          const valorIva = Math.round((rawIva / 100) * 100) / 100;
+          const total = Math.round((rawTotal / 100) * 100) / 100;
 
-            if (targetTipo === 'vendas') {
-              allInvoices.push({
-                nifEmitente: cleanNif,
-                nomeEmitente: decodeEntities(companyName || 'Empresa Emitente'),
-                nifAdquirente: String(item.nifAdquirente || ''),
-                nomeAdquirente: decodeEntities(item.nomeAdquirente || `Cliente NIF ${item.nifAdquirente || 'Final'}`),
-                tipoDoc: item.tipoDocumentoDesc || item.tipoDocumento || 'FT',
-                numeroDoc: item.numerodocumento || '',
-                dataEmissao: item.dataEmissaoDocumento || '',
-                dataRegisto: item.dataEmissaoDocumento || '',
-                atcud: item.atcud || '',
-                baseTributavel,
-                taxaIva,
-                valorIva,
-                total,
-                estado: item.estadoBeneficioDescEmitente || item.estadoBeneficioDesc || 'Comunicada',
-                setor: item.actividadeEmitenteDesc ? decodeEntities(item.actividadeEmitenteDesc) : 'Vendas / Serviços',
-              });
-            } else {
-              allInvoices.push({
-                nifEmitente: String(item.nifEmitente || ''),
-                nomeEmitente: decodeEntities(item.nomeEmitente || `Fornecedor NIF ${item.nifEmitente || ''}`),
-                nifAdquirente: cleanNif,
-                nomeAdquirente: decodeEntities(companyName || `Empresa NIF ${cleanNif}`),
-                tipoDoc: item.tipoDocumentoDesc || item.tipoDocumento || 'FT',
-                numeroDoc: item.numerodocumento || '',
-                dataEmissao: item.dataEmissaoDocumento || '',
-                dataRegisto: item.dataEmissaoDocumento || '',
-                atcud: item.atcud || '',
-                baseTributavel,
-                taxaIva,
-                valorIva,
-                total,
-                estado: item.estadoBeneficioDesc || 'Registado',
-                setor: item.actividadeEmitenteDesc ? decodeEntities(item.actividadeEmitenteDesc) : 'Geral',
-              });
-            }
+          // Taxa de IVA aproximada
+          let taxaIva = '23%';
+          if (baseTributavel > 0) {
+            const ratio = valorIva / baseTributavel;
+            if (ratio < 0.04) taxaIva = '0%';
+            else if (ratio < 0.09) taxaIva = '6%';
+            else if (ratio < 0.18) taxaIva = '13%';
+            else taxaIva = '23%';
+          } else if (valorIva === 0) {
+            taxaIva = 'Isento / 0%';
           }
-        } catch (intervalErr) {
-          console.warn(`Aviso ao extrair intervalo ${interval.start} a ${interval.end}:`, intervalErr);
+
+          if (targetTipo === 'vendas') {
+            allInvoices.push({
+              nifEmitente: cleanNif,
+              nomeEmitente: decodeEntities(companyName || 'Empresa Emitente'),
+              nifAdquirente: String(item.nifAdquirente || ''),
+              nomeAdquirente: decodeEntities(item.nomeAdquirente || `Cliente NIF ${item.nifAdquirente || 'Final'}`),
+              tipoDoc: item.tipoDocumentoDesc || item.tipoDocumento || 'FT',
+              numeroDoc: item.numerodocumento || '',
+              dataEmissao: item.dataEmissaoDocumento || '',
+              dataRegisto: item.dataEmissaoDocumento || '',
+              atcud: item.atcud || '',
+              baseTributavel,
+              taxaIva,
+              valorIva,
+              total,
+              estado: item.estadoBeneficioDescEmitente || item.estadoBeneficioDesc || 'Comunicada',
+              setor: item.actividadeEmitenteDesc ? decodeEntities(item.actividadeEmitenteDesc) : 'Vendas / Serviços',
+            });
+          } else {
+            allInvoices.push({
+              nifEmitente: String(item.nifEmitente || ''),
+              nomeEmitente: decodeEntities(item.nomeEmitente || `Fornecedor NIF ${item.nifEmitente || ''}`),
+              nifAdquirente: cleanNif,
+              nomeAdquirente: decodeEntities(companyName || `Empresa NIF ${cleanNif}`),
+              tipoDoc: item.tipoDocumentoDesc || item.tipoDocumento || 'FT',
+              numeroDoc: item.numerodocumento || '',
+              dataEmissao: item.dataEmissaoDocumento || '',
+              dataRegisto: item.dataEmissaoDocumento || '',
+              atcud: item.atcud || '',
+              baseTributavel,
+              taxaIva,
+              valorIva,
+              total,
+              estado: item.estadoBeneficioDesc || 'Registado',
+              setor: item.actividadeEmitenteDesc ? decodeEntities(item.actividadeEmitenteDesc) : 'Geral',
+            });
+          }
         }
       }
     }
