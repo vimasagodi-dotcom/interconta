@@ -301,14 +301,14 @@ export default async function handler(req: any, res: any) {
         .replace(/&amp;/gi, '&');
     };
 
-    // Função que processa 1 intervalo de datas e devolve as linhas da AT
-    const fetchInterval = async (interval: { start: string; end: string }): Promise<any[]> => {
+    // Função que processa 1 intervalo+classe e devolve as linhas da AT
+    const fetchInterval = async (interval: { start: string; end: string }, cls: string): Promise<any[]> => {
       try {
         let jsonEndpoint: string;
         if (targetTipo === 'vendas') {
-          // Usar classeDocumentoFilter vazio = devolve SI + PY + todos os tipos numa única query
+          // A AT requer classeDocumentoFilter com valor: 'SI' ou 'PY' (classe vazia devolve 0 resultados)
           const q = new URLSearchParams({
-            classeDocumentoFilter: '',
+            classeDocumentoFilter: cls,
             dataInicioFilter: interval.start,
             dataFimFilter: interval.end,
             semRecibosVerdesFilter: 'N',
@@ -336,19 +336,30 @@ export default async function handler(req: any, res: any) {
         const atData = await atRes.json();
         return atData?.linhas || [];
       } catch (e) {
-        console.warn(`Aviso ao extrair intervalo ${interval.start} a ${interval.end}:`, e);
+        console.warn(`Aviso ao extrair intervalo ${interval.start} a ${interval.end} (${cls}):`, e);
         return [];
       }
     };
 
-    // 7. Executar pedidos em paralelo (grupos de 8) para caber no timeout da Vercel
+    // 7. Construir todas as combinações intervalo x classe e executar em paralelo (grupos de 8)
     const allInvoices: any[] = [];
     const seenDocs = new Set<string>();
     const CONCURRENCY = 8;
+    // Para vendas: usar SI (Fatura/FS/NC) + PY (Fatura-Recibo/recibo verde)
+    // Para compras: apenas uma classe (sem filtro)
+    const classesToQuery = targetTipo === 'vendas' ? ['SI', 'PY'] : [''];
 
-    for (let i = 0; i < intervals.length; i += CONCURRENCY) {
-      const chunk = intervals.slice(i, i + CONCURRENCY);
-      const results = await Promise.all(chunk.map(fetchInterval));
+    // Gerar todas as tarefas: cada intervalo x cada classe
+    const tasks: Array<{ interval: { start: string; end: string }; cls: string }> = [];
+    for (const interval of intervals) {
+      for (const cls of classesToQuery) {
+        tasks.push({ interval, cls });
+      }
+    }
+
+    for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+      const chunk = tasks.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(chunk.map(t => fetchInterval(t.interval, t.cls)));
 
       for (const linhas of results) {
         for (const item of linhas) {
