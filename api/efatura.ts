@@ -345,9 +345,10 @@ export default async function handler(req: any, res: any) {
     const allInvoices: any[] = [];
     const seenDocs = new Set<string>();
     const CONCURRENCY = 8;
-    // Para vendas: usar SI (Fatura/FS/NC) + PY (Fatura-Recibo/recibo verde)
-    // Para compras: apenas uma classe (sem filtro)
-    const classesToQuery = targetTipo === 'vendas' ? ['SI', 'PY'] : [''];
+    // Para vendas: usar SI (Fatura/FS/NC) + WD (Fatura a consumidor final/talão) + PY (Fatura-Recibo/recibo verde)
+    // WD é a classe em falta que contém faturas a consumidor final (999999990)
+    // Para compras: apenas uma classe (sem filtro de classe)
+    const classesToQuery = targetTipo === 'vendas' ? ['SI', 'WD', 'PY'] : [''];
 
     // Gerar todas as tarefas: cada intervalo x cada classe
     const tasks: Array<{ interval: { start: string; end: string }; cls: string }> = [];

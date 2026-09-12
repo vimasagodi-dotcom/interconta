@@ -477,21 +477,29 @@ const EFaturaPage = () => {
         XLSX.utils.book_append_sheet(wb, wsDetailed, "Faturas Detalhadas");
       }
 
-      // Folha 3: Resumo Financeiro e Totais
+      // Folha 3: Resumo Financeiro e Totais (inclui valores certificados AT quando disponíveis)
       const totalBase = allInvoices.reduce((acc, cur) => acc + (cur.baseTributavel || 0), 0);
       const totalIva = allInvoices.reduce((acc, cur) => acc + (cur.valorIva || 0), 0);
       const totalGlobal = allInvoices.reduce((acc, cur) => acc + (cur.total || 0), 0);
+      const cs = resData.certifiedSummary;
 
-      const summaryRows = [
+      const summaryRows: Array<{ "Indicador": string; "Valor": string | number }> = [
         { "Indicador": "NIF Empresa Titular", "Valor": activeNif },
         { "Indicador": "Nome Empresa Titular", "Valor": activeNome },
         { "Indicador": "Tipo de Documentos", "Valor": tipo === "compras" ? "Compras (Adquirente)" : "Vendas (Emitente)" },
         { "Indicador": "Data Início", "Valor": dataInicio },
         { "Indicador": "Data Fim", "Valor": dataFim },
-        { "Indicador": "Total de Faturas Detalhadas Extraídas", "Valor": allInvoices.length },
-        { "Indicador": "Base Tributável Total (€)", "Valor": Math.round(totalBase * 100) / 100 },
-        { "Indicador": "Total IVA (€)", "Valor": Math.round(totalIva * 100) / 100 },
-        { "Indicador": "Total Global com IVA (€)", "Valor": Math.round(totalGlobal * 100) / 100 },
+        { "Indicador": "---", "Valor": "--- TOTAIS CERTIFICADOS PELA AT (VALORES OFICIAIS) ---" },
+        { "Indicador": "Nº Total Faturas Certificadas AT", "Valor": cs ? cs.numFaturas : "N/A" },
+        { "Indicador": "Base Tributável Oficial AT (€)", "Valor": cs ? cs.baseTributavel : "N/A" },
+        { "Indicador": "IVA Oficial AT (€)", "Valor": cs ? cs.valorIva : "N/A" },
+        { "Indicador": "Total Global Oficial AT (€)", "Valor": cs ? cs.total : "N/A" },
+        { "Indicador": "---", "Valor": "--- LISTAGEM DETALHADA EXTRAÍDA (SUJEITA A LIMITE AT) ---" },
+        { "Indicador": "Faturas Detalhadas Extraídas", "Valor": allInvoices.length },
+        { "Indicador": "Base Tributável Detalhada (€)", "Valor": Math.round(totalBase * 100) / 100 },
+        { "Indicador": "IVA Detalhado (€)", "Valor": Math.round(totalIva * 100) / 100 },
+        { "Indicador": "Total Detalhado com IVA (€)", "Valor": Math.round(totalGlobal * 100) / 100 },
+        { "Indicador": "NOTA", "Valor": "O portal AT limita a 300 docs/dia. Se algum dia tiver >300 faturas, a listagem detalhada fica incompleta. Os valores certificados AT são sempre os corretos." },
       ];
       const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
       XLSX.utils.book_append_sheet(wb, wsSummary, "Resumo e Totais");
@@ -505,9 +513,11 @@ const EFaturaPage = () => {
       setProgressMsg("");
       setIsExtracting(false);
 
-      toast.success(
-        `Ficheiro "${fileName}" com ${allInvoices.length} faturas reais descarregado com sucesso!`
-      );
+      const certCount = cs ? cs.numFaturas : null;
+      const msg = certCount && certCount !== allInvoices.length
+        ? `Excel descarregado! ${allInvoices.length} faturas detalhadas + Totais Certificados AT (${certCount.toLocaleString("pt-PT")} faturas, ${cs!.total.toLocaleString("pt-PT", { style: "currency", currency: "EUR" })}) na folha "Totais Mensais AT".`
+        : `Ficheiro "${fileName}" com ${allInvoices.length} faturas descarregado com sucesso!`;
+      toast.success(msg, { duration: 8000 });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro desconhecido";
       toast.error(`Falha na extração e-Fatura: ${msg}`);
