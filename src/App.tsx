@@ -44,13 +44,12 @@ const ProtectedRoutes = () => {
     return (
       <Routes>
         <Route element={<AppLayout />}>
+          <Route path="/" element={<Navigate to="/portal" replace />} />
           <Route path="/portal" element={<PortalPage />} />
           <Route path="/portal/conta" element={<PortalContaPage />} />
           <Route path="/portal/documentos" element={<PortalDocumentosPage />} />
           <Route path="/portal/mensagens" element={<PortalMensagensPage />} />
-          {/* <Route path="/portal/toconline" element={<PortalTOConlinePage />} /> */}
-          {/* <Route path="/portal/colaboradores" element={<PortalColaboradoresPage />} /> */}
-          <Route path="*" element={<Navigate to="/portal" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     );
@@ -59,6 +58,9 @@ const ProtectedRoutes = () => {
   return (
     <Routes>
       <Route element={<AppLayout />}>
+        {/* Root Redirect */}
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
         {/* Admin/Colaborador Routes */}
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/clientes" element={<ClientesPage />} />
@@ -66,25 +68,20 @@ const ProtectedRoutes = () => {
         <Route path="/tarefas" element={<TarefasPage />} />
         <Route path="/lancamentos" element={<LancamentosPage />} />
         <Route path="/documentos" element={<DocumentosPage />} />
-        {/* <Route path="/toconline" element={<TOConlinePage />} /> */}
-        {/* <Route path="/agenda" element={<AgendaPage />} /> */}
         <Route path="/faturacao" element={<FaturacaoPage />} />
         <Route path="/saft" element={<SafTPage />} />
         <Route path="/efatura" element={<EFaturaPage />} />
         <Route path="/whatsapp" element={<WhatsAppPage />} />
-        {/* <Route path="/agenda" element={<AgendaPage />} /> */}
         <Route path="/definicoes" element={<DefinicoesPage />} />
 
-        
         {/* Portal Routes for Impersonation (Admin viewing as Client) */}
         <Route path="/portal" element={<PortalPage />} />
         <Route path="/portal/conta" element={<PortalContaPage />} />
         <Route path="/portal/documentos" element={<PortalDocumentosPage />} />
         <Route path="/portal/mensagens" element={<PortalMensagensPage />} />
-        {/* <Route path="/portal/toconline" element={<PortalTOConlinePage />} /> */}
-        {/* <Route path="/portal/colaboradores" element={<PortalColaboradoresPage />} /> */}
 
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        {/* 404 Fallback */}
+        <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>
   );

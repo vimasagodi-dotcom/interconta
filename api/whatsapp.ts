@@ -194,11 +194,11 @@ export default async function handler(req: any, res: any) {
       // --- COMANDO: CLIENTES ---
       else if (lower.includes('cliente') || lower.includes('empresas')) {
         try {
-          const { data: clients } = await supabase.from('clients').select('name, nif, city').limit(15);
+          const { data: clients } = await supabase.from('clientes').select('name, nif, localidade').eq('status', 'ativo').limit(15);
           if (clients && clients.length > 0) {
             let msg = `👥 *Clientes / Empresas Registadas (${clients.length}):*\n\n`;
             for (const c of clients) {
-              msg += `• *${c.name}*\n  NIF: \`${c.nif || 'N/D'}\`${c.city ? ` | ${c.city}` : ''}\n`;
+              msg += `• *${c.name}*\n  NIF: \`${c.nif || 'N/D'}\`${c.localidade ? ` | ${c.localidade}` : ''}\n`;
             }
             msg += `\nPara ver totais, envie: *resumo [NIF]*`;
             botResponse = msg;

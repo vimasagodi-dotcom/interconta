@@ -142,45 +142,45 @@ const ClienteFormDialog = ({
 
     setIsSearchingNif(true);
     try {
-      const targetUrl = "https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number";
-      const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
-      const response = await fetch(proxyUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ countryCode: "PT", vatNumber: nif }),
-      });
-
+      const response = await fetch(`/api/nif?nif=${nif}`);
+      if (!response.ok) throw new Error("Falha na consulta do NIF");
       const data = await response.json();
 
-      if (data.valid) {
-        form.setValue("inscrito_vies", true);
+      if (data.success || data.valid || data.name) {
+        form.setValue("inscrito_vies", !!(data.valid || data.source === 'vies'));
         if (data.name) form.setValue("name", data.name.trim());
         
+        if (data.city) form.setValue("localidade", data.city.trim());
+        if (data.pc4 && data.pc3) {
+          form.setValue("codigoPostal", `${data.pc4}-${data.pc3}`);
+        }
         if (data.address) {
           const addressLines = data.address.split('\n').map((l: string) => l.trim()).filter(Boolean);
           if (addressLines.length > 0) {
             const lastLine = addressLines[addressLines.length - 1];
             const zipMatch = lastLine.match(/(\d{4}-\d{3})\s+(.*)/);
             if (zipMatch) {
-              form.setValue("codigoPostal", zipMatch[1]);
-              form.setValue("localidade", zipMatch[2]);
+              if (!data.pc4) form.setValue("codigoPostal", zipMatch[1]);
+              if (!data.city) form.setValue("localidade", zipMatch[2]);
               form.setValue("morada", addressLines.slice(0, -1).join(', '));
             } else {
               form.setValue("morada", data.address.replace(/\n/g, ', '));
             }
+          } else {
+            form.setValue("morada", data.address);
           }
         }
 
         toast({
           title: "Dados encontrados!",
-          description: "Os dados públicos da empresa foram preenchidos automágicamente.",
+          description: "Os dados da empresa foram preenchidos automaticamente.",
         });
       } else {
         form.setValue("inscrito_vies", false);
         toast({
-          title: "Não encontrado no VIES",
-          description: "O NIF fornecido não está registado para operações transfronteiriças no VIES.",
+          title: "NIF não encontrado",
+          description: "Não foram encontrados registos automáticos para este NIF.",
+          variant: "destructive",
         });
       }
     } catch (error) {

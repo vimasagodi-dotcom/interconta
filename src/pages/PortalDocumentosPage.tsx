@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { FileText, Download, File, Image as ImageIcon, FileSpreadsheet, Loader2 } from "lucide-react";
+import { FileText, Download, File, Image as ImageIcon, FileSpreadsheet, Loader2, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+import { type Client } from "@/lib/clientes";
 
 const fileIcon = (type: string) => {
   const t = type.toLowerCase();
@@ -12,16 +14,101 @@ const fileIcon = (type: string) => {
   return <File className="w-5 h-5 text-muted-foreground" />;
 };
 
+interface PortalDocument {
+  id: string;
+  name: string;
+  client?: string;
+  type?: string;
+  size?: string;
+  file_url?: string;
+  created_at?: string;
+}
+
 const PortalDocumentosPage = () => {
-  const [docs, setDocs] = useState<any[]>([]);
+  const { user, impersonatedClient } = useAuth();
+  const [docs, setDocs] = useState<PortalDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasAccess, setHasAccess] = useState(true);
 
   useEffect(() => {
-    supabase.from('documentos').select('*').order('created_at', { ascending: false }).then(({data}) => {
-      if (data) setDocs(data);
+    const loadDocuments = async () => {
+      setLoading(true);
+
+      let targetClientName: string | null = null;
+
+      if (impersonatedClient) {
+        if (impersonatedClient.access_documentos === false) {
+          setHasAccess(false);
+          setLoading(false);
+          return;
+        }
+        targetClientName = impersonatedClient.name;
+      } else if (user?.id) {
+        const { data: client } = await supabase
+          .from("clientes")
+          .select("name, access_documentos")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (client) {
+          if (client.access_documentos === false) {
+            setHasAccess(false);
+            setLoading(false);
+            return;
+          }
+          targetClientName = client.name;
+        } else if (user.email) {
+          const { data: clientByEmail } = await supabase
+            .from("clientes")
+            .select("name, access_documentos")
+            .eq("email", user.email)
+            .maybeSingle();
+
+          if (clientByEmail) {
+            if (clientByEmail.access_documentos === false) {
+              setHasAccess(false);
+              setLoading(false);
+              return;
+            }
+            targetClientName = clientByEmail.name;
+          }
+        }
+      }
+
+      if (!targetClientName) {
+        setDocs([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("documentos")
+        .select("*")
+        .eq("client", targetClientName)
+        .order("created_at", { ascending: false });
+
+      if (!error && data) {
+        setDocs(data as PortalDocument[]);
+      }
       setLoading(false);
-    });
-  }, []);
+    };
+
+    loadDocuments();
+  }, [user, impersonatedClient]);
+
+  if (!hasAccess) {
+    return (
+      <div className="p-6 lg:p-8 flex flex-col items-center justify-center min-h-[60vh] text-center">
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Lock className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <h2 className="text-xl font-bold">Acesso a Documentos Restrito</h2>
+        <p className="text-muted-foreground max-w-md mt-2">
+          O acesso aos documentos está temporariamente indisponível para a sua conta. Contacte o gabinete para mais informações.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 lg:p-8 space-y-6 max-w-[1200px]">
@@ -40,16 +127,23 @@ const PortalDocumentosPage = () => {
               {fileIcon(doc.type || "")}
               <div>
                 <p className="text-sm font-medium text-foreground">{doc.name}</p>
-                <p className="text-xs text-muted-foreground">{new Date(doc.created_at).toLocaleDateString('pt-PT')} · {doc.size}</p>
+                <p className="text-xs text-muted-foreground">
+                  {doc.created_at ? new Date(doc.created_at).toLocaleDateString("pt-PT") : ""}
+                  {doc.size ? ` · ${doc.size}` : ""}
+                </p>
               </div>
             </div>
-            <Button variant="ghost" size="sm" asChild>
-              <a href={doc.file_url} target="_blank" rel="noopener noreferrer"><Download className="w-4 h-4" /></a>
-            </Button>
+            {doc.file_url ? (
+              <Button variant="ghost" size="sm" asChild>
+                <a href={doc.file_url} target="_blank" rel="noopener noreferrer" download>
+                  <Download className="w-4 h-4" />
+                </a>
+              </Button>
+            ) : null}
           </motion.div>
         ))}
         {docs.length === 0 && (
-          <p className="text-sm text-muted-foreground pt-4">Ainda não existem documentos publicados.</p>
+          <p className="text-sm text-muted-foreground pt-4">Ainda não existem documentos publicados para a sua empresa.</p>
         )}
       </div>
       )}

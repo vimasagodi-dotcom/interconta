@@ -65,11 +65,12 @@ const EFaturaPage = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(false);
 
-  // Passo 2: Seleção de Documentos & Datas
+  // Passo 2: Seleção de Documentos & Datas (dinâmico com o ano corrente)
+  const currentYear = new Date().getFullYear();
   const [tipo, setTipo] = useState<"compras" | "vendas">("compras");
-  const [ano, setAno] = useState<string>("2025");
-  const [dataInicio, setDataInicio] = useState<string>("2025-01-01");
-  const [dataFim, setDataFim] = useState<string>("2025-12-31");
+  const [ano, setAno] = useState<string>(String(currentYear));
+  const [dataInicio, setDataInicio] = useState<string>(`${currentYear}-01-01`);
+  const [dataFim, setDataFim] = useState<string>(`${currentYear}-12-31`);
 
   // Estado de Extração e Download
   const [isExtracting, setIsExtracting] = useState<boolean>(false);
@@ -145,7 +146,7 @@ const EFaturaPage = () => {
   };
 
   const handleMonthChange = (monthNum: number) => {
-    const y = ano || "2026";
+    const y = ano || String(currentYear);
     const mStr = String(monthNum).padStart(2, "0");
     const lastDay = new Date(parseInt(y, 10), monthNum, 0).getDate();
     setDataInicio(`${y}-${mStr}-01`);
@@ -800,7 +801,11 @@ const EFaturaPage = () => {
                   Atalhos Rápidos de Período
                 </Label>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {["2026", "2025", "2024"].map((y) => (
+                  {[
+                    String(currentYear),
+                    String(currentYear - 1),
+                    String(currentYear - 2),
+                  ].map((y) => (
                     <Button
                       key={y}
                       type="button"
@@ -869,7 +874,9 @@ const EFaturaPage = () => {
                   { n: 12, l: "Dez" },
                 ].map((m) => {
                   const mStr = String(m.n).padStart(2, "0");
-                  const isActive = dataInicio === `${ano}-${mStr}-01`;
+                  const lastDayOfMonth = new Date(parseInt(ano || String(currentYear), 10), m.n, 0).getDate();
+                  const lastDayStr = String(lastDayOfMonth).padStart(2, "0");
+                  const isActive = dataInicio === `${ano}-${mStr}-01` && dataFim === `${ano}-${mStr}-${lastDayStr}`;
                   return (
                     <Button
                       key={m.n}
