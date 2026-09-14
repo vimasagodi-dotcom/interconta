@@ -478,6 +478,42 @@ const EFaturaPage = () => {
         XLSX.utils.book_append_sheet(wb, wsDetailed, "Faturas Detalhadas");
       }
 
+      // Folha extra: Totais por Fornecedor/Cliente
+      if (allInvoices.length > 0) {
+        const entityTotals: Record<string, { faturas: number; nc: number; nome: string }> = {};
+
+        allInvoices.forEach(inv => {
+          const isNC = inv.tipoDoc.toLowerCase().includes("nota de cr") || inv.tipoDoc.toLowerCase().includes("devolu");
+          const isCompras = tipo === "compras";
+          const nifEntity = isCompras ? inv.nifEmitente : inv.nifAdquirente;
+          const nomeEntity = isCompras ? inv.nomeEmitente : inv.nomeAdquirente;
+
+          if (!entityTotals[nifEntity]) {
+            entityTotals[nifEntity] = { faturas: 0, nc: 0, nome: nomeEntity };
+          }
+          if (isNC) {
+            entityTotals[nifEntity].nc += Math.abs(inv.total || 0); // Notas de crédito já podem vir com sinal negativo
+          } else {
+            entityTotals[nifEntity].faturas += (inv.total || 0);
+          }
+        });
+
+        const entityLabelNIF = tipo === "compras" ? "NIF Emitente" : "NIF Adquirente";
+        const entityLabelNome = tipo === "compras" ? "Nome Emitente" : "Nome Adquirente";
+        const sheetName = tipo === "compras" ? "Totais por Fornecedor" : "Totais por Cliente";
+
+        const rowsEntityTotals = Object.entries(entityTotals).map(([nif, data]) => ({
+          [entityLabelNIF]: nif,
+          [entityLabelNome]: data.nome,
+          "Faturas": Math.round(data.faturas * 100) / 100,
+          "Notas de Crédito": Math.round(data.nc * 100) / 100,
+          "Total Líquido": Math.round((data.faturas - data.nc) * 100) / 100
+        }));
+
+        const wsEntityTotals = XLSX.utils.json_to_sheet(rowsEntityTotals);
+        XLSX.utils.book_append_sheet(wb, wsEntityTotals, sheetName);
+      }
+
       // Folha 3: Resumo Financeiro e Totais (inclui valores certificados AT quando disponíveis)
       const totalBase = allInvoices.reduce((acc, cur) => acc + (cur.baseTributavel || 0), 0);
       const totalIva = allInvoices.reduce((acc, cur) => acc + (cur.valorIva || 0), 0);
