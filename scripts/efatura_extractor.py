@@ -229,12 +229,113 @@ def consolidate_files(files, target_dir, tipo_str, start_date_str, end_date_str)
     combined_df.drop_duplicates(inplace=True)
     final_len = len(combined_df)
 
+    def clean_currency(x):
+        if isinstance(x, str):
+            return float(x.replace(' €', '').replace('.', '').replace(',', '.'))
+        return x
+
+    if 'Emitente' in combined_df.columns:
+        split_emitente = combined_df['Emitente'].str.split(' - ', n=1, expand=True)
+        combined_df['NIF Emitente'] = split_emitente[0] if len(split_emitente.columns) > 0 else ''
+        combined_df['Nome Emitente'] = split_emitente[1] if len(split_emitente.columns) > 1 else ''
+    else:
+        combined_df['NIF Emitente'] = ''
+        combined_df['Nome Emitente'] = ''
+
+    combined_df['NIF Adquirente'] = ''
+    combined_df['Nome Adquirente'] = ''
+
+    if 'Nº Fatura / ATCUD' in combined_df.columns:
+        split_col = combined_df['Nº Fatura / ATCUD'].str.split(' / ', n=1, expand=True)
+        combined_df['Nº Documento'] = split_col[0] if len(split_col.columns) > 0 else ''
+        combined_df['ATCUD'] = split_col[1] if len(split_col.columns) > 1 else ''
+    else:
+        combined_df['Nº Documento'] = ''
+        combined_df['ATCUD'] = ''
+
+    if 'Data Emissão' in combined_df.columns:
+        combined_df['Data Emissão'] = pd.to_datetime(combined_df['Data Emissão'], format='%d-%m-%Y', errors='coerce').dt.strftime('%Y-%m-%d')
+    else:
+        combined_df['Data Emissão'] = ''
+    
+    combined_df['Data Registo AT'] = combined_df['Data Emissão']
+
+    if 'Base Tributável' in combined_df.columns:
+        combined_df['Base Tributável (€)'] = combined_df['Base Tributável'].apply(clean_currency)
+    else:
+        combined_df['Base Tributável (€)'] = 0.0
+
+    if 'IVA' in combined_df.columns:
+        combined_df['Valor IVA (€)'] = combined_df['IVA'].apply(clean_currency)
+    else:
+        combined_df['Valor IVA (€)'] = 0.0
+
+    if 'Total' in combined_df.columns:
+        combined_df['Total com IVA (€)'] = combined_df['Total'].apply(clean_currency)
+    else:
+        combined_df['Total com IVA (€)'] = 0.0
+
+    def calc_taxa(row):
+        base = row['Base Tributável (€)']
+        iva = row['Valor IVA (€)']
+        if base and base != 0:
+            return f"{round((iva / base) * 100)}%"
+        return "0%"
+    combined_df['Taxa IVA'] = combined_df.apply(calc_taxa, axis=1)
+
+    rename_cols = {
+        'Tipo': 'Tipo Doc',
+        'Situação': 'Estado',
+        'Setor': 'Setor Atividade'
+    }
+    combined_df.rename(columns=rename_cols, inplace=True)
+
+    final_cols = [
+        'NIF Emitente', 'Nome Emitente', 'NIF Adquirente', 'Nome Adquirente',
+        'Tipo Doc', 'Nº Documento', 'Data Emissão', 'Data Registo AT', 'ATCUD',
+        'Base Tributável (€)', 'Taxa IVA', 'Valor IVA (€)', 'Total com IVA (€)',
+        'Estado', 'Setor Atividade'
+    ]
+    for col in final_cols:
+        if col not in combined_df.columns:
+            combined_df[col] = ''
+    
+    combined_df = combined_df[final_cols]
+
+    # Calcular totais por fornecedor
+    pivot_df = combined_df.copy()
+    pivot_df['Total com IVA (€)'] = pd.to_numeric(pivot_df['Total com IVA (€)'], errors='coerce').fillna(0)
+    
+    def get_doc_group(tipo):
+        tipo_str = str(tipo).lower()
+        if 'nota de cr' in tipo_str or 'devolu' in tipo_str:
+            return 'Notas de Crédito'
+        return 'Faturas'
+        
+    pivot_df['Doc Group'] = pivot_df['Tipo Doc'].apply(get_doc_group)
+    
+    totais = pd.pivot_table(pivot_df, 
+                            values='Total com IVA (€)', 
+                            index=['NIF Emitente', 'Nome Emitente'], 
+                            columns=['Doc Group'], 
+                            aggfunc='sum', 
+                            fill_value=0).reset_index()
+    
+    if 'Faturas' not in totais.columns:
+        totais['Faturas'] = 0.0
+    if 'Notas de Crédito' not in totais.columns:
+        totais['Notas de Crédito'] = 0.0
+        
+    totais['Total Líquido'] = totais['Faturas'] - totais['Notas de Crédito']
+
     consolidated_filename = f"CONSOLIDADO_FATURAS_{tipo_str.upper()}_{start_date_str}_{end_date_str}.xlsx"
     consolidated_path = os.path.join(target_dir, consolidated_filename)
 
     try:
-        combined_df.to_excel(consolidated_path, index=False)
-        print(f"\n[SUCESSO] Ficheiro consolidado unico gerado!")
+        with pd.ExcelWriter(consolidated_path, engine='openpyxl') as writer:
+            combined_df.to_excel(writer, sheet_name='Faturas', index=False)
+            totais.to_excel(writer, sheet_name='Totais por Fornecedor', index=False)
+        print(f"\n[SUCESSO] Ficheiro consolidado unico gerado com formatação Anexo 1 e Totais!")
         print(f"Ficheiro: {consolidated_path}")
         print(f"Total de linhas consolidadas: {final_len} (removidos {initial_len - final_len} duplicados)")
     except Exception as save_err:
