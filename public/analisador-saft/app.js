@@ -229,14 +229,16 @@ function setupSearchFilters(data) {
     const invStatus = document.getElementById('filter-invoice-status');
 
     const filterInvoices = () => {
-        const query = invSearch.value.toLowerCase().trim();
-        const type = invType.value;
-        const status = invStatus.value;
+        const query = document.getElementById('invoice-search').value.toLowerCase().trim();
+        const type = document.getElementById('filter-invoice-type').value;
+        const status = document.getElementById('filter-invoice-status').value;
 
         const filtered = data.invoices.filter(inv => {
-            const matchesQuery = inv.invoiceNo.toLowerCase().includes(query) || 
-                                 inv.customerName.toLowerCase().includes(query) || 
-                                 inv.customerTaxId.includes(query);
+            const invNo = inv.invoiceNo ? inv.invoiceNo.toLowerCase() : '';
+            const custName = inv.customerName ? inv.customerName.toLowerCase() : '';
+            const custTax = inv.customerTaxId ? inv.customerTaxId.toLowerCase() : '';
+            
+            const matchesQuery = invNo.includes(query) || custName.includes(query) || custTax.includes(query);
             const matchesType = type === '' || inv.invoiceType === type;
             const matchesStatus = status === '' || inv.status === status;
             return matchesQuery && matchesType && matchesStatus;
@@ -256,9 +258,11 @@ function setupSearchFilters(data) {
     // Customers filtering
     const custSearch = document.getElementById('customer-search');
     const filterCustomers = () => {
-        const query = custSearch.value.toLowerCase().trim();
+        const query = document.getElementById('customer-search').value.toLowerCase().trim();
         const filtered = Object.values(data.customers).filter(c => {
-            return c.companyName.toLowerCase().includes(query) || c.taxId.includes(query);
+            const name = c.companyName ? c.companyName.toLowerCase() : '';
+            const tax = c.taxId ? c.taxId.toLowerCase() : '';
+            return name.includes(query) || tax.includes(query);
         });
         renderCustomersList(filtered);
     };
@@ -268,9 +272,11 @@ function setupSearchFilters(data) {
     // Products filtering
     const prodSearch = document.getElementById('product-search');
     const filterProducts = () => {
-        const query = prodSearch.value.toLowerCase().trim();
+        const query = document.getElementById('product-search').value.toLowerCase().trim();
         const filtered = Object.values(data.products).filter(p => {
-            return p.code.toLowerCase().includes(query) || p.description.toLowerCase().includes(query);
+            const code = p.code ? p.code.toLowerCase() : '';
+            const desc = p.description ? p.description.toLowerCase() : '';
+            return code.includes(query) || desc.includes(query);
         });
         renderProductsList(filtered);
     };
