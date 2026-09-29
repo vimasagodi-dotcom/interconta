@@ -82,20 +82,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const initAuth = async () => {
-      // 1. Verificar Supabase auth session
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const formatted = await formatUser(session.user);
-        setUser(formatted);
+    let isMounted = true;
+
+    // Safety fallback: se o Supabase demorar mais de 2.5s a responder (ex: rede lenta ou projeto pausado),
+    // liberta o ecrã de carregamento para o utilizador poder ver a página de login / acesso imediato.
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
         setLoading(false);
-        return;
+      }
+    }, 2500);
+
+    const initAuth = async () => {
+      try {
+        // 1. Verificar Supabase auth session
+        const { data } = await supabase.auth.getSession();
+        const session = data?.session;
+
+        if (session?.user && isMounted) {
+          try {
+            const formatted = await formatUser(session.user);
+            if (isMounted) {
+              setUser(formatted);
+              setLoading(false);
+              clearTimeout(safetyTimer);
+              return;
+            }
+          } catch (formatErr) {
+            console.warn("Erro ao formatar utilizador Supabase:", formatErr);
+          }
+        }
+      } catch (authErr) {
+        console.warn("Supabase auth.getSession falhou ou inacessível:", authErr);
       }
 
       // 2. Se não houver sessão Supabase, verificar sessão Demo / Cliente guardada localmente
       try {
         const savedDemo = localStorage.getItem(STORAGE_KEY_DEMO);
-        if (savedDemo) {
+        if (savedDemo && isMounted) {
           const parsed = JSON.parse(savedDemo);
           if (parsed?.user) {
             setUser(parsed.user);
@@ -108,22 +131,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn("Erro ao restaurar sessão local:", err);
       }
 
-      setLoading(false);
+      if (isMounted) {
+        setLoading(false);
+        clearTimeout(safetyTimer);
+      }
     };
 
     initAuth();
 
     // Ouvir alterações no Auth do Supabase
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        localStorage.removeItem(STORAGE_KEY_DEMO);
-        const formatted = await formatUser(session.user);
-        setUser(formatted);
-      }
-      setLoading(false);
-    });
+    let subscription: { unsubscribe: () => void } | null = null;
+    try {
+      const res = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (session?.user && isMounted) {
+          localStorage.removeItem(STORAGE_KEY_DEMO);
+          try {
+            const formatted = await formatUser(session.user);
+            if (isMounted) setUser(formatted);
+          } catch (e) {
+            console.warn("Erro ao processar alteração de auth:", e);
+          }
+        }
+        if (isMounted) setLoading(false);
+      });
+      subscription = res?.data?.subscription || null;
+    } catch (subErr) {
+      console.warn("Erro ao subscrever onAuthStateChange:", subErr);
+    }
 
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+      if (subscription) subscription.unsubscribe();
+    };
   }, []);
 
   // quickLogin MUST be declared BEFORE login (to avoid ReferenceError)
@@ -323,6 +363,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex min-h-screen w-full flex-col items-center justify-center bg-background text-foreground">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <div className="text-center">
+            <p className="font-semibold text-sm tracking-wide">INTERCONTA</p>
+            <p className="text-xs text-muted-foreground mt-1">A carregar aplicação...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -335,7 +389,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !!user, 
       loading 
     }}>
-        {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }

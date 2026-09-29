@@ -15,7 +15,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
  * Isto permite atribuir contas de login livremente no Admin panel (bypass RLS / bypass email / sem logout).
  */
 export const adminAuth = {
-  createUser: async (payload: any) => {
+  createUser: async (payload: Record<string, unknown>) => {
     const res = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
       method: "POST",
       headers: {
@@ -33,7 +33,7 @@ export const adminAuth = {
     return { data: { user: data }, error: null };
   },
 
-  updateUserById: async (uid: string, payload: any) => {
+  updateUserById: async (uid: string, payload: Record<string, unknown>) => {
     const res = await fetch(`${supabaseUrl}/auth/v1/admin/users/${uid}`, {
       method: "PUT",
       headers: {
