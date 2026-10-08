@@ -99,11 +99,12 @@ const WhatsAppPage = () => {
       };
 
       setMessages((prev) => [...prev, botMsg]);
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Falha de rede";
       const errorMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         sender: "bot",
-        text: `⚠️ Erro ao comunicar com o assistente: ${err?.message || "Falha de rede"}`,
+        text: `⚠️ Erro ao comunicar com o assistente: ${msg}`,
         time: new Date().toLocaleTimeString("pt-PT", { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages((prev) => [...prev, errorMsg]);

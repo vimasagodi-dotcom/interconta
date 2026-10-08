@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { fetchFiscalConfig, saveFiscalConfig, FiscalConfig } from "@/lib/fiscal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -51,11 +51,7 @@ const FiscalConfigPanel = () => {
   const [configs, setConfigs] = useState<Record<string, FiscalConfig>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    loadInfo();
-  }, [ano]);
-
-  const loadInfo = async () => {
+  const loadInfo = useCallback(async () => {
     setLoading(true);
     const data = await fetchFiscalConfig(ano);
     
@@ -78,7 +74,11 @@ const FiscalConfigPanel = () => {
     
     setConfigs(mapa);
     setLoading(false);
-  };
+  }, [ano]);
+
+  useEffect(() => {
+    loadInfo();
+  }, [loadInfo]);
 
   const handleUpdate = async (obKey: string, partial: Partial<FiscalConfig>) => {
     const updated = { ...configs[obKey], ...partial };
@@ -104,7 +104,7 @@ const FiscalConfigPanel = () => {
       if (error?.code === "42P01") {
         toast({ title: "Tabela Inexistente", description: "O gestor de base de dados ainda não criou a tabela fiscal_config no Supabase.", variant: "destructive" });
       } else {
-        toast({ title: "Erro a gravar", description: (error as any)?.message, variant: "destructive" });
+        toast({ title: "Erro a gravar", description: error?.message ?? "Erro desconhecido", variant: "destructive" });
       }
       setSaving(s => ({ ...s, [obKey]: false }));
       return;

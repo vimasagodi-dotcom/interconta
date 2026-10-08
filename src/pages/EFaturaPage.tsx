@@ -53,6 +53,14 @@ interface ExtractedInvoice {
   setor: string;
 }
 
+export interface TotaisMensaisItem {
+  mes: string;
+  numFaturas: number;
+  baseTributavel: number;
+  valorIva: number;
+  total: number;
+}
+
 const EFaturaPage = () => {
   const { user } = useAuth();
   const [clients, setClients] = useState<Client[]>([]);
@@ -82,9 +90,9 @@ const EFaturaPage = () => {
     baseTributavel: number;
     valorIva: number;
     total: number;
-    months?: any[];
+    months?: TotaisMensaisItem[];
   } | null>(null);
-  const [totaisMensaisAt, setTotaisMensaisAt] = useState<any[]>([]);
+  const [totaisMensaisAt, setTotaisMensaisAt] = useState<TotaisMensaisItem[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [currentPage, setCurrentPage] = useState<number>(1);
   const itemsPerPage = 10;
@@ -94,11 +102,6 @@ const EFaturaPage = () => {
       setClients(data);
     });
   }, []);
-
-  // Apenas Admin e Colaborador podem aceder
-  if (user?.role === "cliente") {
-    return <Navigate to="/portal" replace />;
-  }
 
   const handleClientChange = (clientId: string) => {
     setSelectedClientId(clientId);
@@ -124,7 +127,9 @@ const EFaturaPage = () => {
             setNomeEmpresa(data.name);
           }
         }
-      } catch {}
+      } catch {
+        // Fallback silencioso se a API NIF não estiver disponível
+      }
     }
   };
 
@@ -429,7 +434,7 @@ const EFaturaPage = () => {
 
       // Folha 1 (se disponível): Totais Mensais Certificados da AT (oficial mês a mês sem limites)
       if (hasTotais) {
-        const rowsTotais = resData.totaisMensais.map((tm: any) => ({
+        const rowsTotais = resData.totaisMensais.map((tm: TotaisMensaisItem) => ({
           "Ano / Mês": tm.mes,
           "Nº Faturas Entregues": tm.numFaturas,
           "Base Tributável (€)": tm.baseTributavel,
@@ -437,10 +442,10 @@ const EFaturaPage = () => {
           "Valor Total (€)": tm.total,
         }));
 
-        const sumFaturas = resData.totaisMensais.reduce((s: number, r: any) => s + (r.numFaturas || 0), 0);
-        const sumBase = resData.totaisMensais.reduce((s: number, r: any) => s + (r.baseTributavel || 0), 0);
-        const sumIva = resData.totaisMensais.reduce((s: number, r: any) => s + (r.valorIva || 0), 0);
-        const sumTotal = resData.totaisMensais.reduce((s: number, r: any) => s + (r.total || 0), 0);
+        const sumFaturas = resData.totaisMensais.reduce((s: number, r: TotaisMensaisItem) => s + (r.numFaturas || 0), 0);
+        const sumBase = resData.totaisMensais.reduce((s: number, r: TotaisMensaisItem) => s + (r.baseTributavel || 0), 0);
+        const sumIva = resData.totaisMensais.reduce((s: number, r: TotaisMensaisItem) => s + (r.valorIva || 0), 0);
+        const sumTotal = resData.totaisMensais.reduce((s: number, r: TotaisMensaisItem) => s + (r.total || 0), 0);
 
         rowsTotais.push({
           "Ano / Mês": "TOTAL CERTIFICADO AT",
@@ -595,6 +600,11 @@ const EFaturaPage = () => {
     () => extractedInvoices.reduce((acc, cur) => acc + cur.total, 0),
     [extractedInvoices]
   );
+
+  // Apenas Admin e Colaborador podem aceder ao extrator e-Fatura
+  if (user?.role === "cliente") {
+    return <Navigate to="/portal" replace />;
+  }
 
   return (
     <div className="flex flex-col h-full space-y-6 p-6 max-w-6xl mx-auto pb-16">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,8 @@ import {
   Priority, 
   Recurrence, 
   mapTaskFromDB, 
-  getGhostTasks 
+  getGhostTasks,
+  type TaskInsertRow,
 } from "@/lib/tasks";
 
 const columns: { key: TaskStatus; label: string; color: string }[] = [
@@ -59,8 +60,8 @@ const TarefasPage = () => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   
-  const [clients, setClients] = useState<any[]>([]);
-  const [colaboradores, setColaboradores] = useState<any[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [colaboradores, setColaboradores] = useState<{ name: string }[]>([]);
 
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -77,7 +78,7 @@ const TarefasPage = () => {
 
   // Ghost Tasks States
   const [ghostTasks, setGhostTasks] = useState<Task[]>([]);
-  const [vistos, setVistos] = useState<any[]>([]);
+  const [vistos, setVistos] = useState<{ cliente_id: string; obrigacao: string; concluido?: boolean }[]>([]);
 
   useEffect(() => {
     fetchClients().then(setClients);
@@ -107,7 +108,7 @@ const TarefasPage = () => {
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     const monthlyTemplates = dbTasks.filter(t => t.recurrence === "mensal" && !t.templateId);
     
-    const newInstances: any[] = [];
+    const newInstances: TaskInsertRow[] = [];
     for (const template of monthlyTemplates) {
       const instanceExists = dbTasks.some(t => t.templateId === template.id && t.dueDate.startsWith(monthKey));
       if (!instanceExists) {
@@ -135,15 +136,15 @@ const TarefasPage = () => {
     setLoading(false);
   };
 
-  const generateGhostTasks = async () => {
+  const generateGhostTasks = useCallback(async () => {
     const today = new Date();
     const configs = await fetchFiscalConfig(today.getFullYear());
     const ghosts = getGhostTasks(clients, vistos, configs);
     setGhostTasks(ghosts);
-  };
+  }, [clients, vistos]);
 
   useEffect(() => { loadTarefas(); }, []);
-  useEffect(() => { generateGhostTasks(); }, [clients, vistos]);
+  useEffect(() => { generateGhostTasks(); }, [generateGhostTasks]);
 
   const resetForm = () => {
     setTitle(""); setDescription(""); setClient(""); setResponsible(""); setDueDate(new Date().toISOString().split("T")[0]); setPriority("media"); setRecurrence("pontual");
@@ -248,7 +249,7 @@ const TarefasPage = () => {
       return;
     }
 
-    const updateData: any = { status: newStatus };
+    const updateData: { status: TaskStatus; responsible?: string } = { status: newStatus };
     const userName = user?.name || user?.email || "Desconhecido";
     
     if (newStatus === "concluida") {

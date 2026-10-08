@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
@@ -41,11 +41,7 @@ const RelatoriosPage = () => {
   const [filterTsu, setFilterTsu] = useState<string>("todos");
   const [fiscalConfigs, setFiscalConfigs] = useState<FiscalConfig[]>([]);
 
-  useEffect(() => {
-    carregarDados();
-  }, [ano, mes]);
-
-  const carregarDados = async () => {
+  const carregarDados = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Carregar apenas Clientes Ativos
@@ -90,7 +86,11 @@ const RelatoriosPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [ano, mes, toast]);
+
+  useEffect(() => {
+    carregarDados();
+  }, [carregarDados]);
 
   const alternarVisto = async (clienteId: string, obrigacao: ObrigacaoKey, estaConcluido: boolean) => {
     const chave = `${clienteId}_${obrigacao}`;
@@ -129,7 +129,7 @@ const RelatoriosPage = () => {
       setVistos((prev) => ({ ...prev, [chave]: estaConcluido }));
       toast({
         title: "Erro de Gravação",
-        description: "Erro ao guardar a alteração. Verifique a ligação: " + (error as any).message,
+        description: "Erro ao guardar a alteração. Verifique a ligação: " + (error instanceof Error ? error.message : "Erro desconhecido"),
         variant: "destructive"
       });
     }

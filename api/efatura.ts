@@ -107,7 +107,9 @@ export default async function handler(req: any, res: any) {
     if (attrMatch && attrMatch[1]) {
       try {
         attributes = JSON.parse(attrMatch[1]);
-      } catch {}
+      } catch {
+        // Ignora erro de parsing e usa atributos padrão
+      }
     }
 
     // 3. Submeter credenciais ao endpoint de autenticação do acesso.gov.pt
@@ -149,7 +151,9 @@ export default async function handler(req: any, res: any) {
         try {
           const parsedErr = JSON.parse(errMatch[1]);
           if (parsedErr.errorMsg) errMsg = parsedErr.errorMsg;
-        } catch {}
+        } catch {
+          // Mantém mensagem de erro padrão da AT
+        }
       }
       return res.status(401).json({
         success: false,
@@ -332,7 +336,10 @@ export default async function handler(req: any, res: any) {
           },
         });
 
-        if (!atRes.ok) return [];
+        if (!atRes.ok) {
+          console.warn(`[AT Error] Status ${atRes.status} ao extrair ${interval.start} a ${interval.end} (${cls})`);
+          return [];
+        }
         const atData = await atRes.json();
         return atData?.linhas || [];
       } catch (e) {
@@ -341,14 +348,18 @@ export default async function handler(req: any, res: any) {
       }
     };
 
-    // 7. Construir todas as combinações intervalo x classe e executar em paralelo (grupos de 8)
+    // 7. Construir todas as combinações intervalo x classe e executar em paralelo (grupos menores e com pausas)
     const allInvoices: any[] = [];
     const seenDocs = new Set<string>();
-    const CONCURRENCY = 8;
+    const CONCURRENCY = 2; // Reduzido de 8 para 2 para evitar Rate Limiting (Erro 429)
+    const DELAY_MS = 1500; // Pausa de 1.5s entre grupos
+    
+    const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
     // Para vendas: usar SI (Fatura/FS/NC) + WD (Fatura a consumidor final/talão) + PY (Fatura-Recibo/recibo verde)
     // WD é a classe em falta que contém faturas a consumidor final (999999990)
     // Para compras: apenas uma classe (sem filtro de classe)
-    const classesToQuery = targetTipo === 'vendas' ? ['SI', 'WD', 'PY'] : [''];
+    const classesToQuery = targetTipo === 'vendas' ? ['SI', 'WD', 'PY', 'F', 'NC', 'FS', 'FR'] : [''];
 
     // Gerar todas as tarefas: cada intervalo x cada classe
     const tasks: Array<{ interval: { start: string; end: string }; cls: string }> = [];
@@ -361,6 +372,11 @@ export default async function handler(req: any, res: any) {
     for (let i = 0; i < tasks.length; i += CONCURRENCY) {
       const chunk = tasks.slice(i, i + CONCURRENCY);
       const results = await Promise.all(chunk.map(t => fetchInterval(t.interval, t.cls)));
+      
+      // Delay entre batches para evitar rate limit
+      if (i + CONCURRENCY < tasks.length) {
+        await delay(DELAY_MS); 
+      }
 
       for (const linhas of results) {
         for (const item of linhas) {
