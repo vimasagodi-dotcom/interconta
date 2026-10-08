@@ -8,7 +8,17 @@ if (!supabaseUrl || !supabaseAnonKey) {
   console.warn('Supabase URL or Anon Key is missing from environment variables.');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    // Previne deadlock crónico do navigator.locks no Chromium / WebKit
+    lock: async (_name, _acquireTimeout, fn) => {
+      return await fn();
+    },
+  },
+});
 
 /**
  * Cliente REST direto para Admin API (evita o bloqueio "Forbidden key" do package supabase-js no browser).

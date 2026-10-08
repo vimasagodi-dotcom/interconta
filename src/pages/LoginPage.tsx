@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,12 +18,14 @@ import {
   User, 
   Zap,
   ArrowRight,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const LoginPage = () => {
-  const { login, quickLogin, clientLoginByNifOrEmail } = useAuth();
+  const navigate = useNavigate();
+  const { login, quickLogin, clientLoginByNifOrEmail, isAuthenticated, user } = useAuth();
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,16 +36,32 @@ const LoginPage = () => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("credentials");
 
+  // Se já estiver autenticado (ex: restaurado da sessão), redireciona imediatamente
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      navigate(user.role === "cliente" ? "/portal" : "/dashboard", { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
+
   const handleCredentialsSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
 
-    const res = await login(email, password);
-    if (!res.success) {
-      setError(res.error || "Credenciais inválidas. Tente novamente.");
+    try {
+      const res = await login(email, password);
+      if (!res.success) {
+        setError(res.error || "Credenciais inválidas. Tente novamente.");
+        setLoading(false);
+      } else {
+        const dest = res.role === "cliente" ? "/portal" : "/dashboard";
+        navigate(dest, { replace: true });
+      }
+    } catch (err: unknown) {
+      console.error("Erro no formulário de login:", err);
+      setError("Ocorreu um erro ao autenticar. Tente novamente ou use o Acesso Rápido.");
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleClientSubmit = async (e: React.FormEvent) => {
@@ -50,11 +69,19 @@ const LoginPage = () => {
     setError("");
     setLoading(true);
 
-    const res = await clientLoginByNifOrEmail(clientIdentifier);
-    if (!res.success) {
-      setError(res.error || "Cliente não encontrado.");
+    try {
+      const res = await clientLoginByNifOrEmail(clientIdentifier);
+      if (!res.success) {
+        setError(res.error || "Cliente não encontrado.");
+        setLoading(false);
+      } else {
+        navigate("/portal", { replace: true });
+      }
+    } catch (err: unknown) {
+      console.error("Erro no login de cliente:", err);
+      setError("Erro ao autenticar cliente.");
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleQuickAccess = (role: "admin" | "colaborador" | "cliente") => {
@@ -62,8 +89,9 @@ const LoginPage = () => {
     setLoading(true);
     setTimeout(() => {
       quickLogin(role);
+      navigate(role === "cliente" ? "/portal" : "/dashboard", { replace: true });
       setLoading(false);
-    }, 300);
+    }, 150);
   };
 
 
@@ -209,7 +237,14 @@ const LoginPage = () => {
                 </div>
 
                 <Button type="submit" className="w-full h-11 font-medium" disabled={loading}>
-                  {loading ? "A autenticar..." : "Entrar com Email"}
+                  {loading ? (
+                    <span className="flex items-center justify-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      A autenticar...
+                    </span>
+                  ) : (
+                    "Entrar com Email"
+                  )}
                 </Button>
               </form>
 

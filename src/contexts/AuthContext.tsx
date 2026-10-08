@@ -15,6 +15,7 @@ export interface User {
 
 export interface LoginResult {
   success: boolean;
+  role?: UserRole;
   error?: string;
 }
 
@@ -44,30 +45,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let role: UserRole = (sessionUser.user_metadata?.role as UserRole) || "admin";
     let name: string = sessionUser.user_metadata?.name || sessionUser.email?.split("@")[0] || "Utilizador";
 
-    // Tentar obter role real da tabela colaboradores se não especificado ou padrão
+    // Enriquecimento rápido com timeout de 1.5s para nunca bloquear o login
     try {
-      const { data: colab } = await supabase
-        .from("colaboradores")
-        .select("name, role")
-        .eq("id", sessionUser.id)
-        .maybeSingle();
-
-      if (colab) {
-        if (colab.role) role = colab.role as UserRole;
-        if (colab.name) name = colab.name;
-      } else {
-        // Tentar obter se é cliente
-        const { data: client } = await supabase
-          .from("clientes")
-          .select("id, name, user_id")
-          .or(`user_id.eq.${sessionUser.id},email.eq.${sessionUser.email}`)
+      const enrichmentPromise = (async () => {
+        const { data: colab } = await supabase
+          .from("colaboradores")
+          .select("name, role")
+          .eq("id", sessionUser.id)
           .maybeSingle();
 
-        if (client) {
-          role = "cliente";
-          if (client.name) name = client.name;
+        if (colab) {
+          if (colab.role) role = colab.role as UserRole;
+          if (colab.name) name = colab.name;
+        } else {
+          const { data: client } = await supabase
+            .from("clientes")
+            .select("id, name, user_id")
+            .or(`user_id.eq.${sessionUser.id},email.eq.${sessionUser.email}`)
+            .maybeSingle();
+
+          if (client) {
+            role = "cliente";
+            if (client.name) name = client.name;
+          }
         }
-      }
+      })();
+
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500));
+      await Promise.race([enrichmentPromise, timeoutPromise]);
     } catch (e) {
       console.warn("Aviso ao carregar detalhes adicionais do perfil:", e);
     }
@@ -191,40 +196,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Tenta fallback local para contas conhecidas quando o Supabase está em pausa/offline
   const tryLocalFallback = (email: string, password: string): LoginResult | null => {
     const knownPasswords = ["Interconta2026*", "admin123", "123456"];
-    if (!knownPasswords.includes(password)) return null;
+    const cleanPwd = password.trim();
+    if (!knownPasswords.includes(cleanPwd)) return null;
 
     const normalizedEmail = email.trim().toLowerCase();
     const adminEmails = ["vimasagodi@gmail.com", "admin@interconta.pt"];
-    const colaboradorEmails = ["ne_dias@sapo.pt", "colaborador@interconta.pt"];
+    const colaboradorEmails = [
+      "ne_dias@sapo.pt",
+      "colaborador@interconta.pt",
+      "madalenafcn@gmail.com",
+    ];
 
     if (adminEmails.includes(normalizedEmail)) {
       quickLogin("admin", normalizedEmail, "Vítor Dias (Admin)");
-      return { success: true };
+      return { success: true, role: "admin" };
     }
     if (colaboradorEmails.includes(normalizedEmail)) {
-      quickLogin("colaborador", normalizedEmail, "Nelson Dias (Colaborador)");
-      return { success: true };
+      const name = normalizedEmail.includes("madalena")
+        ? "Madalena Meira (Colaboradora)"
+        : "Nelson Dias (Colaborador)";
+      quickLogin("colaborador", normalizedEmail, name);
+      return { success: true, role: "colaborador" };
     }
     return null;
   };
 
   const login = async (email: string, password: string): Promise<LoginResult> => {
-    try {
-      const cleanEmail = email.trim().toLowerCase();
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+    try {
+      // Timeout seguro de 6 segundos para nunca congelar em "A autenticar..."
+      const signInPromise = supabase.auth.signInWithPassword({
         email: cleanEmail,
-        password,
+        password: cleanPassword,
       });
 
-      if (error) {
-        console.error("Erro no login Supabase:", error.message);
+      const timeoutPromise = new Promise<{ data: null; error: { message: string } }>((resolve) =>
+        setTimeout(() => resolve({ data: null, error: { message: "timeout" } }), 6000)
+      );
 
-        // Fallback para contas conhecidas quando Supabase falha (projeto pausado, email não confirmado, etc.)
-        const fallback = tryLocalFallback(cleanEmail, password);
+      const { data, error } = await Promise.race([signInPromise, timeoutPromise]);
+
+      if (error) {
+        console.warn("Aviso no login Supabase:", error.message);
+
+        // Fallback imediato para contas autorizadas caso o Supabase falhe ou expire
+        const fallback = tryLocalFallback(cleanEmail, cleanPassword);
         if (fallback) {
           console.warn("Supabase indisponível — a usar sessão local de fallback.");
           return fallback;
+        }
+
+        if (error.message === "timeout") {
+          return {
+            success: false,
+            error: "O servidor demorou a responder. Verifique as suas credenciais ou use o Acesso Rápido.",
+          };
         }
 
         // Traduzir mensagens de erro habituais do Supabase para Português
@@ -238,7 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } else if (error.message.includes("Too many requests")) {
           ptMsg = "Muitas tentativas falhadas. Aguarde um momento antes de tentar novamente.";
         } else if (error.message.includes("network") || error.message.includes("fetch")) {
-          ptMsg = "Erro de ligação. Verifique a sua ligação à internet.";
+          ptMsg = "Erro de ligação ao servidor. Tente novamente ou use o Acesso Rápido.";
         } else if (error.message.includes("project") || error.message.includes("paused") || error.message.includes("503") || error.message.includes("unavailable")) {
           ptMsg = "O servidor está temporariamente indisponível. Tente novamente em alguns instantes.";
         }
@@ -250,7 +278,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.removeItem(STORAGE_KEY_DEMO);
         const formatted = await formatUser(data.user);
         setUser(formatted);
-        return { success: true };
+        return { success: true, role: formatted.role };
       }
 
       return { success: false, error: "Não foi possível iniciar sessão. Tente novamente." };
@@ -259,14 +287,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // Supabase projeto pausado provoca erro de rede (fetch failed / ERR_NAME_NOT_RESOLVED)
       // Tentar fallback local antes de mostrar erro ao utilizador
-      const fallback = tryLocalFallback(email.trim(), password);
+      const fallback = tryLocalFallback(cleanEmail, cleanPassword);
       if (fallback) {
         console.warn("Supabase inacessível (projeto pausado?) — a usar sessão local de fallback.");
         return fallback;
       }
 
-      const message = err instanceof Error ? err.message : "Exceção ao efetuar autenticação.";
-      return { success: false, error: "Não foi possível contactar o servidor. Verifique a ligação à internet." };
+      return { success: false, error: "Não foi possível contactar o servidor. Verifique a ligação ou utilize o Acesso Rápido." };
     }
   };
 
@@ -312,7 +339,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(clientUser);
           setImpersonatedClient(mockClient);
           localStorage.setItem(STORAGE_KEY_DEMO, JSON.stringify({ user: clientUser, impersonatedClient: mockClient }));
-          return { success: true };
+          return { success: true, role: "cliente" };
         }
 
         return { success: false, error: "Nenhum cliente encontrado com este NIF ou Email." };
@@ -335,7 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         JSON.stringify({ user: clientUser, impersonatedClient: client })
       );
 
-      return { success: true };
+      return { success: true, role: "cliente" };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Erro ao efetuar login de cliente.";
       return { success: false, error: msg };
