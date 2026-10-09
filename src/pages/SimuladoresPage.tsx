@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Calculator,
   Building2,
@@ -46,6 +46,11 @@ import {
   MEAL_EXEMPT_CASH,
   MIN_SALARY_EXEMPT,
 } from "@/lib/salaryCalculator";
+import {
+  IRSTableVersion,
+  loadIRSTableVersions,
+} from "@/lib/irsTablesService";
+import { GerirTabelasDialog } from "@/components/GerirTabelasDialog";
 
 export default function SimuladoresPage() {
   const [activeTab, setActiveTab] = useState("salario-liquido");
@@ -75,6 +80,18 @@ export default function SimuladoresPage() {
   const [independentActivity, setIndependentActivity] = useState<"servicos" | "vendas">("servicos");
   const [independentFirstYear, setIndependentFirstYear] = useState<boolean>(false);
 
+  // --- Estado da Versão das Tabelas de IRS (Nuvem / Supabase / AT) ---
+  const [tableVersions, setTableVersions] = useState<IRSTableVersion[]>([]);
+  const [selectedVersion, setSelectedVersion] = useState<IRSTableVersion | null>(null);
+
+  useEffect(() => {
+    loadIRSTableVersions().then((list) => {
+      setTableVersions(list);
+      const cur = list.find((v) => v.isCurrent) || list[0];
+      setSelectedVersion(cur);
+    });
+  }, []);
+
   // Cálculo reativo do Salário e Custo de Empresa
   const salaryResult = useMemo(() => {
     return calculateSalary({
@@ -92,6 +109,7 @@ export default function SimuladoresPage() {
       otherNonTaxable,
       isMoe,
       workInsuranceRate: workInsuranceRate / 100,
+      tableVersion: selectedVersion || undefined,
     });
   }, [
     grossSalary,
@@ -108,6 +126,7 @@ export default function SimuladoresPage() {
     otherNonTaxable,
     isMoe,
     workInsuranceRate,
+    selectedVersion,
   ]);
 
   // Cálculo do Simulador Inverso
@@ -126,6 +145,7 @@ export default function SimuladoresPage() {
       otherNonTaxable,
       isMoe,
       workInsuranceRate: workInsuranceRate / 100,
+      tableVersion: selectedVersion || undefined,
     });
   }, [
     targetNet,
@@ -142,6 +162,7 @@ export default function SimuladoresPage() {
     otherNonTaxable,
     isMoe,
     workInsuranceRate,
+    selectedVersion,
   ]);
 
   const inverseResult = useMemo(() => {
@@ -160,6 +181,7 @@ export default function SimuladoresPage() {
       otherNonTaxable,
       isMoe,
       workInsuranceRate: workInsuranceRate / 100,
+      tableVersion: selectedVersion || undefined,
     });
   }, [
     calculatedGross,
@@ -176,6 +198,7 @@ export default function SimuladoresPage() {
     otherNonTaxable,
     isMoe,
     workInsuranceRate,
+    selectedVersion,
   ]);
 
   // Cálculo Recibos Verdes
@@ -267,6 +290,53 @@ Calculado com base nas tabelas em vigor (Modelo Marginal de IRS)`;
             <RotateCcw className="w-4 h-4" />
           </Button>
         </div>
+      </div>
+
+      {/* Barra de Seleção de Vigência Fiscal e Gestor de Tabelas da AT */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground whitespace-nowrap">
+            <Sliders className="w-4 h-4 text-primary" />
+            <span>Tabela Fiscal em Vigor:</span>
+          </div>
+
+          <Select
+            value={selectedVersion?.id || ""}
+            onValueChange={(val) => {
+              const found = tableVersions.find((v) => v.id === val);
+              if (found) {
+                setSelectedVersion(found);
+                toast.success(`Tabela alterada para: ${found.name}`);
+              }
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs font-medium w-[240px] sm:w-[320px] bg-background">
+              <SelectValue placeholder="Selecione a versão fiscal" />
+            </SelectTrigger>
+            <SelectContent>
+              {tableVersions.map((v) => (
+                <SelectItem key={v.id} value={v.id} className="text-xs">
+                  {v.name} {v.isCurrent ? "★ (Atual)" : ""}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {selectedVersion && (
+            <Badge variant="outline" className="text-[11px] font-normal border-primary/20 text-muted-foreground hidden lg:inline-flex">
+              Salário Mínimo Isento: {formatEUR(selectedVersion.minExemptSalary)}
+            </Badge>
+          )}
+        </div>
+
+        <GerirTabelasDialog
+          onVersionUpdated={(updatedVer) => {
+            loadIRSTableVersions().then((list) => {
+              setTableVersions(list);
+              setSelectedVersion(updatedVer);
+            });
+          }}
+        />
       </div>
 
       {/* Navegação entre Simuladores */}

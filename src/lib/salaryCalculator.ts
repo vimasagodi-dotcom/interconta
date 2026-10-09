@@ -3,6 +3,8 @@
  * Legislação e Tabelas de Retenção na Fonte (Modelo de Taxas Marginais)
  */
 
+import { IRSTableVersion } from "./irsTablesService";
+
 export type TaxRegion = 'continente' | 'madeira' | 'acores';
 export type MaritalStatus = 'nao_casado' | 'casado_dois_titulares' | 'casado_unico_titular';
 export type MealAllowanceType = 'cartao' | 'dinheiro' | 'nenhum';
@@ -24,6 +26,7 @@ export interface SalaryInput {
   otherNonTaxable: number;        // Rendimentos isentos (ajudas de custo, km, passes)
   isMoe: boolean;                 // Membro de Órgãos Estatutários (MOE / Gerente)
   workInsuranceRate?: number;     // Taxa de seguro acidentes de trabalho da empresa (default 1.5%)
+  tableVersion?: IRSTableVersion; // Versão dinâmica das tabelas de IRS (carregada do Supabase ou importada)
 }
 
 export interface SalaryResult {
@@ -95,10 +98,30 @@ interface IRSBracket {
 function getBrackets(
   region: TaxRegion,
   status: MaritalStatus,
-  hasDisability: boolean
+  hasDisability: boolean,
+  tableVersion?: IRSTableVersion
 ): IRSBracket[] {
   // Coeficiente regional (Madeira ~ -15%, Açores ~ -25% nas taxas)
   const rateFactor = region === 'acores' ? 0.75 : region === 'madeira' ? 0.85 : 1.0;
+
+  // Se uma versão personalizada ou carregada da nuvem estiver ativa
+  if (tableVersion) {
+    let sourceRows = tableVersion.bracketsTableI;
+    if (hasDisability && tableVersion.bracketsDeficientes?.length > 0) {
+      sourceRows = tableVersion.bracketsDeficientes;
+    } else if (status === 'casado_unico_titular' && tableVersion.bracketsTableIV?.length > 0) {
+      sourceRows = tableVersion.bracketsTableIV;
+    }
+
+    if (sourceRows && sourceRows.length > 0) {
+      return sourceRows.map(r => ({
+        limit: r.limit,
+        rate: (r.rate > 1 ? r.rate / 100 : r.rate) * rateFactor,
+        deductionFixed: r.deductionFixed * rateFactor,
+        dependentDeduction: r.dependentDeduction,
+      }));
+    }
+  }
 
   // Sujeito com Deficiência (>= 60%)
   if (hasDisability) {
@@ -186,7 +209,8 @@ export function calculateIRS(
   status: MaritalStatus,
   dependents: number,
   hasDisability: boolean,
-  irsJovem: IRSJovemYear
+  irsJovem: IRSJovemYear,
+  tableVersion?: IRSTableVersion
 ): {
   marginalRate: number;
   deduction: number;
@@ -195,7 +219,8 @@ export function calculateIRS(
   jovemDiscount: number;
   effectiveRetention: number;
 } {
-  if (salary <= MIN_SALARY_EXEMPT && !hasDisability) {
+  const minExempt = tableVersion?.minExemptSalary ?? MIN_SALARY_EXEMPT;
+  if (salary <= minExempt && !hasDisability) {
     return {
       marginalRate: 0,
       deduction: 0,
@@ -206,7 +231,7 @@ export function calculateIRS(
     };
   }
 
-  const brackets = getBrackets(region, status, hasDisability);
+  const brackets = getBrackets(region, status, hasDisability, tableVersion);
   const bracket = brackets.find(b => salary <= b.limit) || brackets[brackets.length - 1];
 
   let marginalRate = bracket.rate;
@@ -277,13 +302,17 @@ export function calculateSalary(input: SalaryInput): SalaryResult {
     otherNonTaxable = 0,
     isMoe = false,
     workInsuranceRate = 0.015,
+    tableVersion,
   } = input;
 
-  // 1. Subsídio de Alimentação
+  // 1. Subsídio de Alimentação (com limites dinâmicos da versão ativa)
   const mealAllowanceTotal = mealDaily * mealDays;
+  const mealExemptCardLimit = tableVersion?.mealExemptCard ?? MEAL_EXEMPT_CARD;
+  const mealExemptCashLimit = tableVersion?.mealExemptCash ?? MEAL_EXEMPT_CASH;
+
   let exemptDailyLimit = 0;
-  if (mealType === 'dinheiro') exemptDailyLimit = MEAL_EXEMPT_CASH;
-  if (mealType === 'cartao') exemptDailyLimit = MEAL_EXEMPT_CARD;
+  if (mealType === 'dinheiro') exemptDailyLimit = mealExemptCashLimit;
+  if (mealType === 'cartao') exemptDailyLimit = mealExemptCardLimit;
 
   const mealAllowanceExempt = Math.min(mealAllowanceTotal, exemptDailyLimit * mealDays);
   const mealAllowanceTaxable = Math.max(0, mealAllowanceTotal - mealAllowanceExempt);
@@ -303,7 +332,8 @@ export function calculateSalary(input: SalaryInput): SalaryResult {
     maritalStatus,
     dependents,
     hasDisability,
-    irsJovem
+    irsJovem,
+    tableVersion
   );
 
   // 5. Duodécimos (Subsídio de Férias e de Natal)
