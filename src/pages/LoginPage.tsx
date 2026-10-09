@@ -19,7 +19,8 @@ import {
   Zap,
   ArrowRight,
   CheckCircle2,
-  Loader2
+  Loader2,
+  Calculator,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -170,16 +171,13 @@ const LoginPage = () => {
                 <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="font-medium">{error}</p>
-                  <p className="text-xs opacity-80 mt-1">
-                    Pode também utilizar o <strong>Acesso Rápido</strong> para entrar instantaneamente no sistema.
-                  </p>
                 </div>
               </motion.div>
             )}
           </AnimatePresence>
 
           <Tabs defaultValue="credentials" value={activeTab} onValueChange={(v) => { setActiveTab(v); setError(""); }}>
-            <TabsList className="grid grid-cols-3 w-full mb-6">
+            <TabsList className="grid grid-cols-2 w-full mb-6">
               <TabsTrigger value="credentials" className="text-xs">
                 <KeyRound className="w-3.5 h-3.5 mr-1 hidden sm:inline" />
                 Conta
@@ -187,10 +185,6 @@ const LoginPage = () => {
               <TabsTrigger value="client" className="text-xs">
                 <Building2 className="w-3.5 h-3.5 mr-1 hidden sm:inline" />
                 Cliente
-              </TabsTrigger>
-              <TabsTrigger value="quick" className="text-xs">
-                <Zap className="w-3.5 h-3.5 mr-1 hidden sm:inline" />
-                Acesso Rápido
               </TabsTrigger>
             </TabsList>
 
@@ -279,67 +273,10 @@ const LoginPage = () => {
               </form>
             </TabsContent>
 
-            {/* TAB 3: QUICK DEMO ACCESS */}
-            <TabsContent value="quick" className="space-y-3">
-              <p className="text-xs text-muted-foreground mb-2">
-                Entre imediatamente sem palavra-passe para explorar os perfis do sistema:
-              </p>
-
-              <button
-                type="button"
-                onClick={() => handleQuickAccess("admin")}
-                className="w-full flex items-center justify-between p-3.5 rounded-xl border border-primary/20 bg-primary/5 hover:bg-primary/10 text-left transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg gradient-accent flex items-center justify-center text-accent-foreground font-bold text-sm">
-                    👑
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Administrador / Gestor</p>
-                    <p className="text-xs text-muted-foreground">Acesso total a clientes, relatórios e definições</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-primary group-hover:translate-x-1 transition-transform" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickAccess("colaborador")}
-                className="w-full flex items-center justify-between p-3.5 rounded-xl border border-border hover:bg-muted/40 text-left transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-info/10 flex items-center justify-center text-info font-bold text-sm">
-                    💼
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Colaborador de Gabinete</p>
-                    <p className="text-xs text-muted-foreground">Gestão de tarefas, lançamentos e documentos</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickAccess("cliente")}
-                className="w-full flex items-center justify-between p-3.5 rounded-xl border border-border hover:bg-muted/40 text-left transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-lg bg-accent/20 flex items-center justify-center text-accent font-bold text-sm">
-                    🏢
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Portal do Cliente (Demo)</p>
-                    <p className="text-xs text-muted-foreground">Vista da empresa cliente com conta corrente</p>
-                  </div>
-                </div>
-                <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
-              </button>
-            </TabsContent>
           </Tabs>
 
-          <div className="pt-6 border-t border-border text-center">
-            <p className="text-xs text-muted-foreground mb-3">Apenas de passagem? Experimente a nossa ferramenta:</p>
+          <div className="pt-6 border-t border-border text-center space-y-2">
+            <p className="text-xs text-muted-foreground mb-3">Apenas de passagem? Experimente as nossas ferramentas gratuitas:</p>
             <Button 
               variant="outline" 
               className="w-full gap-2 h-10 text-xs border-primary/20 hover:bg-primary/5" 
@@ -347,6 +284,15 @@ const LoginPage = () => {
             >
               <ShieldCheck className="w-4 h-4 text-primary" />
               Analisador SAF-T Gratuito
+            </Button>
+
+            <Button 
+              variant="outline" 
+              className="w-full gap-2 h-10 text-xs border-emerald-500/30 hover:bg-emerald-500/10 text-foreground font-medium" 
+              onClick={() => navigate('/simulador')}
+            >
+              <Calculator className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              Simulador de Salário Líquido Gratuito
             </Button>
           </div>
         </motion.div>

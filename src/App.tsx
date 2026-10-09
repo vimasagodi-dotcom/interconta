@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, NavLink } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -98,6 +99,24 @@ const LoginRoute = () => {
   return <LoginPage />;
 };
 
+const PublicSimuladorRoute = () => {
+  return (
+    <div className="min-h-screen bg-background p-4 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-4">
+        <div className="flex items-center justify-between pb-4 border-b border-border">
+          <NavLink to="/login" className="inline-flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+            ← Voltar ao Início
+          </NavLink>
+          <NavLink to="/login">
+            <Button size="sm">Entrar no Sistema</Button>
+          </NavLink>
+        </div>
+        <SimuladoresPage />
+      </div>
+    </div>
+  );
+};
+
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
@@ -110,6 +129,7 @@ const App = () => (
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/login" element={<LoginRoute />} />
+                <Route path="/simulador" element={<PublicSimuladorRoute />} />
                 <Route path="/*" element={<ProtectedRoutes />} />
               </Routes>
             </Suspense>
