@@ -255,7 +255,7 @@ Calculado com base nas tabelas em vigor (Modelo Marginal de IRS)`;
               Simuladores Fiscais & Salariais
             </h1>
             <Badge variant="outline" className="ml-2 border-primary/30 text-primary font-medium">
-              Portugal 2025 / 2026
+              Portugal {selectedVersion?.year || new Date().getFullYear()}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">
