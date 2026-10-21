@@ -558,70 +558,135 @@ export default function ReconciliacaoPage() {
                   </div>
                 </div>
 
-                <div
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={handlePdfDrop}
-                  className="border-2 border-dashed border-border/80 hover:border-primary/50 hover:bg-primary/5 transition-all rounded-xl p-6 text-center flex flex-col items-center justify-center cursor-pointer h-[200px] min-h-[200px]"
-                  onClick={() => document.getElementById("pdf-input-upload")?.click()}
-                >
-                  <Upload className="w-10 h-10 text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium text-foreground">
-                    Arraste os ficheiros PDF ou Excel para aqui
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    ou clique para selecionar (.pdf, .xlsx, .xls, .csv - suporta múltiplos ficheiros)
-                  </p>
-                  <input
-                    id="pdf-input-upload"
-                    type="file"
-                    accept=".pdf,.xlsx,.xls,.csv"
-                    multiple
-                    className="hidden"
-                    onChange={handlePdfSelect}
-                  />
-                </div>
+                <input
+                  id="pdf-input-upload"
+                  type="file"
+                  accept=".pdf,.xlsx,.xls,.csv"
+                  multiple
+                  className="hidden"
+                  onChange={handlePdfSelect}
+                />
 
-                {pdfFiles.length > 0 && (
-                  <div className="mt-4 space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                    <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground px-1">
-                      <span>{pdfFiles.length} documento(s) da contabilidade selecionado(s):</span>
-                      <button
-                        onClick={() => setPdfFiles([])}
-                        className="text-destructive hover:underline"
-                      >
-                        Limpar todos
-                      </button>
+                {pdfFiles.length === 0 ? (
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={handlePdfDrop}
+                    className="border-2 border-dashed border-border/80 hover:border-primary/50 hover:bg-primary/5 transition-all rounded-xl p-6 text-center flex flex-col items-center justify-center cursor-pointer h-[200px] min-h-[200px]"
+                    onClick={() => document.getElementById("pdf-input-upload")?.click()}
+                  >
+                    <Upload className="w-10 h-10 text-muted-foreground mb-3" />
+                    <p className="text-sm font-medium text-foreground">
+                      Arraste os ficheiros PDF ou Excel para aqui
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      ou clique para selecionar (.pdf, .xlsx, .xls, .csv - suporta múltiplos ficheiros)
+                    </p>
+                  </div>
+                ) : pdfFiles.length === 1 ? (
+                  <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {pdfFiles[0].name.match(/\.(xlsx|xls|csv)$/i) ? (
+                        <FileCheck className="w-8 h-8 text-accent flex-shrink-0" />
+                      ) : (
+                        <FileCheck className="w-8 h-8 text-primary flex-shrink-0" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">
+                          {pdfFiles[0].name}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {(pdfFiles[0].size / 1024).toFixed(1)} KB • Ficheiro da contabilidade carregado
+                        </p>
+                      </div>
                     </div>
-                    {pdfFiles.map((file, idx) => {
-                      const isExcel = file.name.match(/\.(xlsx|xls|csv)$/i);
-                      return (
-                        <div
-                          key={idx}
-                          className="bg-card border border-border/80 rounded-lg p-2.5 flex items-center justify-between text-xs"
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => document.getElementById("pdf-input-upload")?.click()}
+                        title="Adicionar mais ficheiros"
+                        className="text-muted-foreground hover:text-primary"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setPdfFiles([])}
+                        className="text-muted-foreground hover:text-destructive"
+                        title="Remover ficheiro"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground px-1 pb-1">
+                      <span>{pdfFiles.length} documentos da contabilidade selecionados:</span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => document.getElementById("pdf-input-upload")?.click()}
+                          className="text-primary hover:underline flex items-center gap-1 font-medium"
                         >
-                          <div className="flex items-center gap-2 truncate pr-2">
-                            {isExcel ? (
-                              <FileSpreadsheet className="w-3.5 h-3.5 text-accent flex-shrink-0" />
-                            ) : (
-                              <FileText className="w-3.5 h-3.5 text-info flex-shrink-0" />
-                            )}
-                            <span className="truncate text-foreground font-medium">{file.name}</span>
-                            <span className="text-muted-foreground">
-                              ({(file.size / 1024).toFixed(0)} KB)
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => removePdfFile(idx)}
-                            className="text-muted-foreground hover:text-destructive"
+                          <Plus className="w-3.5 h-3.5" /> Adicionar mais
+                        </button>
+                        <button
+                          onClick={() => setPdfFiles([])}
+                          className="text-destructive hover:underline font-medium"
+                        >
+                          Limpar todos
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                      {pdfFiles.map((file, idx) => {
+                        const isExcel = file.name.match(/\.(xlsx|xls|csv)$/i);
+                        return (
+                          <div
+                            key={idx}
+                            className="bg-primary/5 border border-primary/20 rounded-xl p-3 flex items-center justify-between text-xs"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      );
-                    })}
+                            <div className="flex items-center gap-2.5 truncate pr-2">
+                              {isExcel ? (
+                                <FileSpreadsheet className="w-4 h-4 text-accent flex-shrink-0" />
+                              ) : (
+                                <FileText className="w-4 h-4 text-primary flex-shrink-0" />
+                              )}
+                              <span className="truncate text-foreground font-semibold">{file.name}</span>
+                              <span className="text-muted-foreground text-[11px]">
+                                ({(file.size / 1024).toFixed(1)} KB)
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removePdfFile(idx)}
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive flex-shrink-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
+
+              {pdfFiles.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border/60">
+                  <p className="text-xs font-semibold text-foreground mb-1 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                    Documento pronto para reconciliação:
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {pdfFiles.length === 1
+                      ? `1 ficheiro carregado (${pdfFiles[0].name.match(/\.(xlsx|xls|csv)$/i) ? "Excel" : "PDF"}). Clique em 'Extrair Dados & Rever' abaixo.`
+                      : `${pdfFiles.length} ficheiros carregados. Clique em 'Extrair Dados & Rever' abaixo.`}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
