@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { fetchClients, type Client } from "@/lib/clientes";
 import { toast } from "sonner";
+import { saveWorkbook } from "@/lib/excelExport";
 
 interface ExtractedInvoice {
   nifEmitente: string;
@@ -548,7 +549,7 @@ const EFaturaPage = () => {
 
       // 2. DISPARAR DOWNLOAD IMEDIATO DO FICHEIRO EXCEL (.xlsx) NO NAVEGADOR
       const fileName = `FATURAS_${tipo.toUpperCase()}_${activeNif}_${ano || "AT"}.xlsx`;
-      XLSX.writeFile(wb, fileName);
+      saveWorkbook(wb, fileName);
 
       setExtractedInvoices(allInvoices);
       setExtractionProgress(100);

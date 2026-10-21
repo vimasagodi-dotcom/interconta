@@ -17,6 +17,86 @@ export function dateToExcelSerial(dateStr: string): number | null {
 }
 
 /**
+ * Guarda e descarrega um livro Excel (.xlsx) de forma robusta e 100% compatível
+ * com todos os navegadores (Chrome, Edge, Firefox, Safari), garantindo que
+ * o nome do ficheiro e a extensão .xlsx são rigorosamente respeitados e nunca perdidos nem substituídos por UUIDs.
+ */
+export function saveWorkbook(wb: any, rawFileName: string): void {
+  // Garantir extensão .xlsx e limpar caracteres inválidos no nome
+  let cleanName = (rawFileName || "export.xlsx").trim();
+  if (!cleanName.toLowerCase().endsWith(".xlsx")) {
+    cleanName += ".xlsx";
+  }
+  // Sanitizar caracteres inválidos para nomes de ficheiros no Windows e browsers
+  cleanName = cleanName.replace(/[\\/:*?"<>|]/g, "_");
+
+  // Se estiver a correr em ambiente Node / JSDOM (ex: testes automatizados vitest)
+  if (
+    typeof window === "undefined" ||
+    typeof document === "undefined" ||
+    typeof window.URL?.createObjectURL !== "function"
+  ) {
+    XLSX.writeFile(wb, cleanName);
+    return;
+  }
+
+  try {
+    // Gerar o buffer binário do Excel (array de bytes uint8)
+    const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+
+    // Criar Blob com o MIME type oficial de folhas de cálculo Excel (.xlsx)
+    const blob = new Blob([excelBuffer], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    // Suporte a navegadores legados (msSaveOrOpenBlob)
+    if (typeof (window.navigator as any)?.msSaveOrOpenBlob === "function") {
+      (window.navigator as any).msSaveOrOpenBlob(blob, cleanName);
+      return;
+    }
+
+    // Criar URL do Blob
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.style.display = "none";
+    link.href = blobUrl;
+    link.setAttribute("download", cleanName);
+    link.download = cleanName;
+
+    document.body.appendChild(link);
+
+    // Disparar o download através de MouseEvent
+    try {
+      const clickEvent = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        view: window,
+      });
+      link.dispatchEvent(clickEvent);
+    } catch {
+      link.click();
+    }
+
+    // IMPORTANTE: NÃO remover o link imediatamente no mesmo tick!
+    // O Chromium / Chrome ignora o atributo download e guarda como UUID se o nó for removido
+    // do DOM antes de o gestor de downloads do browser processar o evento.
+    setTimeout(() => {
+      try {
+        if (link.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+        window.URL.revokeObjectURL(blobUrl);
+      } catch {
+        // Ignorar
+      }
+    }, 2000);
+  } catch (err) {
+    console.error("Falha ao descarregar via Blob, a tentar fallback XLSX.writeFile:", err);
+    XLSX.writeFile(wb, cleanName);
+  }
+}
+
+/**
  * Exporta o ficheiro Excel ORIGINAL (ex: exportado do e-Fatura da AT)
  * preservando exatamente todas as colunas, cabeçalhos e valores originais,
  * - Folha 1: Ficheiro original com todas as linhas reconciliadas PINTADAS A VERDE (#C6EFCE)
@@ -335,7 +415,7 @@ export async function exportOriginalExcelHighlighted(
   const baseName = originalFile.name.replace(/\.[^/.]+$/, "");
   const finalFileName = outputFileName || `${baseName}_RECONCILIADO_PINTADO.xlsx`;
 
-  XLSX.writeFile(wb, finalFileName);
+  saveWorkbook(wb, finalFileName);
 
   return {
     reconciledCount: reconciledRowIndices.size,
@@ -530,5 +610,5 @@ export function exportReconciliationToExcel(
   XLSX.utils.book_append_sheet(wb, ws3, "Faturas Sem Correspondência");
 
   // Gravar e descarregar no browser
-  XLSX.writeFile(wb, fileName);
+  saveWorkbook(wb, fileName);
 }
