@@ -22,6 +22,7 @@ const DefinicoesPage = lazy(() => import("@/pages/DefinicoesPage"));
 const PortalPage = lazy(() => import("@/pages/PortalPage"));
 const SafTPage = lazy(() => import("@/pages/SafTPage"));
 const EFaturaPage = lazy(() => import("@/pages/EFaturaPage"));
+const ReconciliacaoPage = lazy(() => import("@/pages/ReconciliacaoPage"));
 const WhatsAppPage = lazy(() => import("@/pages/WhatsAppPage"));
 const SimuladoresPage = lazy(() => import("@/pages/SimuladoresPage"));
 const PortalContaPage = lazy(() => import("@/pages/PortalContaPage"));
@@ -74,6 +75,7 @@ const ProtectedRoutes = () => {
         <Route path="/faturacao" element={<FaturacaoPage />} />
         <Route path="/saft" element={<SafTPage />} />
         <Route path="/efatura" element={<EFaturaPage />} />
+        <Route path="/reconciliacao" element={<ReconciliacaoPage />} />
         <Route path="/simuladores" element={<SimuladoresPage />} />
         <Route path="/whatsapp" element={<Navigate to="/simuladores" replace />} />
         <Route path="/definicoes" element={<DefinicoesPage />} />

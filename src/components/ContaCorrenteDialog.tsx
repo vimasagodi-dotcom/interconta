@@ -33,6 +33,8 @@ import { toast } from "sonner";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+type JsPdfWithAutoTable = jsPDF & { lastAutoTable?: { finalY: number } };
+
 // O prefixo das chaves de localStorage foi mantido para referência, mas a lógica agora é SQL no Supabase.
 const MOVEMENTS_KEY = "interconta_movements";
 
@@ -192,7 +194,7 @@ const ContaCorrenteDialog = ({
       headStyles: { fillColor: [34, 51, 82] },
     });
 
-    const finalY = (doc as any).lastAutoTable?.finalY ?? 180;
+    const finalY = (doc as JsPdfWithAutoTable).lastAutoTable?.finalY ?? 180;
     doc.setFontSize(10);
     doc.text(
       `Saldo Atual: €${Math.abs(saldoAtual).toLocaleString()}${saldoAtual > 0 ? " em dívida" : saldoAtual < 0 ? " a favor" : ""}`,

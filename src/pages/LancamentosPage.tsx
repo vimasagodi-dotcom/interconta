@@ -31,7 +31,9 @@ const loadYears = (): number[] => {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed.sort((a: number, b: number) => a - b);
     }
-  } catch {}
+  } catch {
+    // Ignore invalid localStorage data and fall back to defaults.
+  }
   const currentYear = new Date().getFullYear();
   return [currentYear - 1, currentYear];
 };

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
-import { fetchClients } from "@/lib/clientes";
+import { fetchClients, type Client } from "@/lib/clientes";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -52,7 +52,7 @@ const DocumentosPage = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   
-  const [clients, setClients] = useState<any[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,7 +116,7 @@ const DocumentosPage = () => {
       client: clientName || "Geral",
       type: fileExt?.toUpperCase() || "FILE",
       size: formatSize(selectedFile.size),
-      uploaded_by: user?.user_metadata?.name || user?.email || "Admin",
+      uploaded_by: user?.name || user?.email || "Admin",
       category,
       file_url: publicUrl,
     };
@@ -273,7 +273,7 @@ const DocumentosPage = () => {
             </div>
             <div className="space-y-1.5">
               <Label>Categoria</Label>
-              <Select value={category} onValueChange={v => setCategory(v as any)}>
+              <Select value={category} onValueChange={(v) => setCategory(v as typeof category)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="fatura">Fatura</SelectItem>

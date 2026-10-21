@@ -18,6 +18,7 @@ import {
   FileSearch2,
   FileSpreadsheet,
   Calculator,
+  Scale,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -31,6 +32,7 @@ const adminNavItems = [
   { to: "/faturacao", label: "Faturação", icon: Receipt },
   { to: "/saft", label: "SAF-T", icon: FileSearch2 },
   { to: "/efatura", label: "e-Fatura", icon: FileSpreadsheet },
+  { to: "/reconciliacao", label: "Reconciliação", icon: Scale },
   { to: "/simuladores", label: "Simuladores", icon: Calculator },
 ];
 

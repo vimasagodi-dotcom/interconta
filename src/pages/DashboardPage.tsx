@@ -11,9 +11,9 @@ import {
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { Badge } from "@/components/ui/badge";
-import { fetchClients, getCurrentMonthAvencaMovements } from "@/lib/clientes";
+import { fetchClients, getCurrentMonthAvencaMovements, type Client, type BillingMovement } from "@/lib/clientes";
 import { fetchFiscalConfig } from "@/lib/fiscal";
-import { getGhostTasks, mapTaskFromDB } from "@/lib/tasks";
+import { getGhostTasks, mapTaskFromDB, type Task } from "@/lib/tasks";
 
 import { supabase } from "@/lib/supabase";
 
@@ -23,9 +23,9 @@ const notifications = [
 ];
 
 const DashboardPage = () => {
-  const [clients, setClients] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [manualMovements, setManualMovements] = useState<any[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [manualMovements, setManualMovements] = useState<BillingMovement[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { 

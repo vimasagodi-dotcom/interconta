@@ -24,7 +24,7 @@ export const fetchFiscalConfig = async (ano: number): Promise<FiscalConfig[]> =>
   return data as FiscalConfig[];
 };
 
-export const saveFiscalConfig = async (config: Partial<FiscalConfig>): Promise<{ success: boolean; error?: any }> => {
+export const saveFiscalConfig = async (config: Partial<FiscalConfig>): Promise<{ success: boolean; error?: { message?: string } }> => {
   if (config.id) {
     // Update existing
     const { error } = await supabase

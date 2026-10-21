@@ -32,6 +32,15 @@ dist-ssr
 *tokens*.json
 *.token
 
-# Local test artifacts and scratch
+# Local test artifacts, tools and scratch
 scratch/
+test_real_data/
 *.test.html
+test_*.xlsx
+test_out_*.xlsx
+test_debug_*.json
+deploy_to_vercel.ps1
+.tools/
+.agents/
+.vite/
+scripts/

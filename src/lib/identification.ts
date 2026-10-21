@@ -9,7 +9,7 @@ export const normalizeString = (str: string): string => {
     ?.toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // Remove accents
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, " ") // Replace punctuation with space
+    .replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, " ") // Replace punctuation with space
     .replace(/\s+/g, " ") // Collapse multiple spaces
     .trim() || "";
 };

@@ -19,7 +19,22 @@ export interface Task {
   templateId?: string;
 }
 
-export const mapTaskFromDB = (row: any): Task => ({
+type TaskRow = {
+  id: string;
+  title: string;
+  description?: string | null;
+  client?: string | null;
+  responsible?: string | null;
+  due_date?: string | null;
+  priority: Priority;
+  status: TaskStatus;
+  recurrence: Recurrence;
+  template_id?: string | null;
+};
+
+export type TaskInsertRow = TaskRow;
+
+export const mapTaskFromDB = (row: TaskRow): Task => ({
   id: row.id,
   title: row.title,
   description: row.description || "",
@@ -32,9 +47,11 @@ export const mapTaskFromDB = (row: any): Task => ({
   templateId: row.template_id || undefined,
 });
 
+type ObligationKey = "dmr" | "saft" | "irc" | "ies" | "salarios" | "inventario" | "modelo_10";
+
 export const getGhostTasks = (
   clients: Client[], 
-  vistos: any[], 
+  vistos: { cliente_id: string; obrigacao: string; concluido?: boolean }[], 
   configs: FiscalConfig[]
 ): Task[] => {
   if (clients.length === 0) return [];
@@ -44,7 +61,7 @@ export const getGhostTasks = (
   const ano = now.getFullYear();
   const mes = now.getMonth() + 1;
 
-  const defaults: any = {
+  const defaults: Record<ObligationKey, { oblig: string; tipo: string; m: number | null; d: number }> = {
     dmr: { oblig: "DMR", tipo: "mensal", m: null, d: 10 },
     saft: { oblig: "SAF-T", tipo: "mensal", m: null, d: 5 },
     irc: { oblig: "IRC", tipo: "anual", m: 5, d: 31 },
@@ -56,9 +73,10 @@ export const getGhostTasks = (
 
   const ghosts: Task[] = [];
   
-  Object.keys(defaults).forEach(obKey => {
-    const def = defaults[obKey];
-    const cfg = configs.find(c => c.obrigacao === obKey);
+  Object.keys(defaults).forEach((obKey) => {
+    const key = obKey as ObligationKey;
+    const def = defaults[key];
+    const cfg = configs.find(c => c.obrigacao === key);
     const isMensal = (cfg ? cfg.tipo : def.tipo) === "mensal";
     const mesEntrega = (cfg ? cfg.mes_entrega : def.m) || 1;
     const diaLimite = (cfg ? cfg.dia_limite : def.d) || 31;
@@ -70,9 +88,8 @@ export const getGhostTasks = (
     const isLate = dateStr < todayStr;
 
     clients.forEach(c => {
-      // @ts-ignore
-      if (c.status === "ativo" && c[obKey]) {
-        const vistoEncontrado = vistos.find(v => v.cliente_id === c.id && v.obrigacao === obKey);
+      if (c.status === "ativo" && c[key]) {
+        const vistoEncontrado = vistos.find(v => v.cliente_id === c.id && v.obrigacao === key);
         let taskStatus: TaskStatus = "por_fazer";
         
         if (vistoEncontrado?.concluido) {
@@ -82,7 +99,7 @@ export const getGhostTasks = (
         }
 
         ghosts.push({
-          id: `__fiscal__${c.id}__${obKey}__${ano}__${mes}`,
+          id: `__fiscal__${c.id}__${key}__${ano}__${mes}`,
           title: `Obrigação: ${def.oblig}`,
           description: `Entrega de prazo legal - gerada automaticamente.`,
           client: c.name,

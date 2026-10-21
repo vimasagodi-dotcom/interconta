@@ -181,7 +181,7 @@ const PortalMensagensPage = () => {
       }
 
       setNewMsg("");
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error("Erro ao enviar mensagem");
       console.error(error);
     } finally {

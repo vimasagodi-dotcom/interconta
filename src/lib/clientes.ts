@@ -190,10 +190,16 @@ export const getRecurringAvencaMovements = (
 
 export const triggerToconlineSync = async (): Promise<{ success: boolean; count?: number; error?: string }> => {
   try {
-    const response = await fetch('/api/sync', {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    const edgeFunctionUrl = `${supabaseUrl}/functions/v1/sync-toconline`;
+
+    const response = await fetch(edgeFunctionUrl, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+        'apikey': supabaseAnonKey,
       }
     });
     
@@ -203,20 +209,20 @@ export const triggerToconlineSync = async (): Promise<{ success: boolean; count?
       data = textData ? JSON.parse(textData) : {};
     } catch (e) {
       console.error("Failed to parse JSON response:", textData);
-      return { success: false, error: `Servidor devolveu resposta inválida: ${textData.substring(0, 100)}...` };
+      return { success: false, error: `Resposta inválida: ${textData.substring(0, 150)}` };
     }
     
     if (!response.ok || !data.success) {
-      console.error("Erro ao invocar API de sincronização:", textData);
-      // Incluir o conteúdo real da resposta para diagnóstico
+      console.error("Erro na Edge Function:", textData);
       const errDetails = typeof data.error === 'string' ? data.error : JSON.stringify(data);
-      return { success: false, error: `Erro na API: ${errDetails}` };
+      return { success: false, error: `Erro: ${errDetails}` };
     }
     
     return { success: true, count: data?.count || 0 };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Erro inesperado na sincronização:", err);
-    return { success: false, error: err.message || "Erro de rede" };
+    const message = err instanceof Error ? err.message : "Erro de rede";
+    return { success: false, error: message };
   }
 };
 

@@ -3,12 +3,12 @@ import { MessageCircle, X, ExternalLink, Bell, ArrowLeft, Send, Loader2 } from "
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
 import { identifyClient } from "@/lib/identification";
 import { Client } from "@/lib/clientes";
+import { Task } from "@/lib/tasks";
 
 interface Message {
   id: string;
@@ -18,21 +18,23 @@ interface Message {
   created_at: string;
 }
 
+interface AssistantTask extends Task {
+  client_id?: string;
+  created_at?: string;
+}
+
 export const MessageAssistant = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
-  const [pendingTasks, setPendingTasks] = useState<any[]>([]);
-  const [selectedTask, setSelectedTask] = useState<any | null>(null);
+  const [pendingTasks, setPendingTasks] = useState<AssistantTask[]>([]);
+  const [selectedTask, setSelectedTask] = useState<AssistantTask | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMsg, setNewMsg] = useState("");
   const [identifiedClient, setIdentifiedClient] = useState<Client | null>(null);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Apenas para admins e colaboradores
-  if (!user || user.role === "cliente") return null;
+  const isStaff = !!user && user.role !== "cliente";
 
   const fetchPendingMessages = async () => {
     const { data } = await supabase
@@ -43,11 +45,13 @@ export const MessageAssistant = () => {
       .order("created_at", { ascending: false });
     
     if (data) {
-      setPendingTasks(data);
+      setPendingTasks(data as AssistantTask[]);
     }
   };
 
   useEffect(() => {
+    if (!isStaff) return;
+
     fetchPendingMessages();
     const channel = supabase
       .channel("assistant_monitor")
@@ -56,11 +60,11 @@ export const MessageAssistant = () => {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [isStaff]);
 
   // Fetch messages when a task is selected
   useEffect(() => {
-    if (!selectedTask) {
+    if (!isStaff || !selectedTask) {
       setMessages([]);
       return;
     }
@@ -113,7 +117,9 @@ export const MessageAssistant = () => {
       .subscribe();
 
     return () => { supabase.removeChannel(chatChannel); };
-  }, [selectedTask]);
+  }, [selectedTask, isStaff]);
+
+  if (!isStaff) return null;
 
   const handleSendReply = async () => {
     if (!newMsg.trim() || !selectedTask || sending) return;
@@ -121,9 +127,9 @@ export const MessageAssistant = () => {
 
     try {
       const normalize = (str: string) => 
-        str?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, " ").replace(/\s+/g, " ").trim() || "";
+        str?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, " ").replace(/\s+/g, " ").trim() || "";
 
-      let clientId = selectedTask.client_id;
+      let clientId: string | undefined = selectedTask.client_id;
       
       // Fallback via conteúdo se o nome for lixo
       if (!clientId || normalize(selectedTask.client) === "cliente") {

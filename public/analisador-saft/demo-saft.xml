@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<AuditFile xmlns="urn:OECD:StandardAuditFile-Tax:PT_1.04_01">
+  <Header>
+    <AuditFileSchemaVersion>1.04_01</AuditFileSchemaVersion>
+    <CompanyName>MINHA EMPRESA TECNOLÓGICA LDA</CompanyName>
+    <TaxRegistrationNumber>501234568</TaxRegistrationNumber>
+    <TaxAccountingBasis>F</TaxAccountingBasis>
+    <CompanyAddress>
+      <AddressDetail>Avenida da Liberdade 123, 4º Andar</AddressDetail>
+      <City>Lisboa</City>
+      <PostalCode>1250-140</PostalCode>
+      <Country>PT</Country>
+    </CompanyAddress>
+    <FiscalYear>2026</FiscalYear>
+    <StartDate>2026-01-01</StartDate>
+    <EndDate>2026-12-31</EndDate>
+    <CurrencyCode>EUR</CurrencyCode>
+    <DateCreated>2026-07-22</DateCreated>
+  </Header>
+  <MasterFiles>
+    <Customer>
+      <CustomerID>1</CustomerID>
+      <CustomerTaxID>509876543</CustomerTaxID>
+      <CompanyName>GLOBAL TRADING PORTUGAL SA</CompanyName>
+      <BillingAddress>
+        <AddressDetail>Rua Garrett 25</AddressDetail>
+        <City>Lisboa</City>
+        <PostalCode>1200-203</PostalCode>
+        <Country>PT</Country>
+      </BillingAddress>
+    </Customer>
+    <Customer>
+      <CustomerID>2</CustomerID>
+      <CustomerTaxID>123456789</CustomerTaxID> <!-- Invalid NIF test -->
+      <CompanyName>CLIENTE ERRO DE NIF LDA</CompanyName>
+      <BillingAddress>
+        <AddressDetail>Praceta das Flores 2</AddressDetail>
+        <City>Porto</City>
+        <PostalCode>4000-001</PostalCode>
+        <Country>PT</Country>
+      </BillingAddress>
+    </Customer>
+    <Customer>
+      <CustomerID>3</CustomerID>
+      <CustomerTaxID>999999990</CustomerTaxID> <!-- Consumidor Final -->
+      <CompanyName>Consumidor Final</CompanyName>
+      <BillingAddress>
+        <AddressDetail>Desconhecido</AddressDetail>
+        <City>Lisboa</City>
+        <PostalCode>1000-000</PostalCode>
+        <Country>PT</Country>
+      </BillingAddress>
+    </Customer>
+    <Product>
+      <ProductCode>P0001</ProductCode>
+      <ProductGroup>Serviços</ProductGroup>
+      <ProductDescription>Consultoria de TI Especializada</ProductDescription>
+    </Product>
+    <Product>
+      <ProductCode>P0002</ProductCode>
+      <ProductGroup>Licenças</ProductGroup>
+      <ProductDescription>Subscrição Anual Cloud Server</ProductDescription>
+    </Product>
+    <Product>
+      <ProductCode>P0003</ProductCode>
+      <ProductGroup>Hardware</ProductGroup>
+      <ProductDescription>Monitor Pro UltraWide 34"</ProductDescription>
+    </Product>
+  </MasterFiles>
+  <SourceDocuments>
+    <SalesInvoices>
+      <NumberOfEntries>5</NumberOfEntries>
+      <TotalDebit>0.00</TotalDebit>
+      <TotalCredit>12650.00</TotalCredit>
+      <!-- Invoice 1 (Normal) -->
+      <Invoice>
+        <InvoiceNo>FT A/1</InvoiceNo>
+        <DocumentStatus>
+          <InvoiceStatus>N</InvoiceStatus>
+          <InvoiceStatusDate>2026-01-15T10:30:00</InvoiceStatusDate>
+        </DocumentStatus>
+        <InvoiceDate>2026-01-15</InvoiceDate>
+        <InvoiceType>FT</InvoiceType>
+        <CustomerID>1</CustomerID>
+        <Line>
+          <LineNumber>1</LineNumber>
+          <ProductCode>P0001</ProductCode>
+          <ProductDescription>Consultoria de TI Especializada</ProductDescription>
+          <Quantity>10.0</Quantity>
+          <UnitPrice>150.00</UnitPrice>
+          <CreditAmount>1500.00</CreditAmount>
+          <Tax>
+            <TaxType>IVA</TaxType>
+            <TaxCountryRegion>PT</TaxCountryRegion>
+            <TaxCode>NOR</TaxCode>
+            <TaxPercentage>23.00</TaxPercentage>
+          </Tax>
+        </Line>
+        <Line>
+          <LineNumber>2</LineNumber>
+          <ProductCode>P0002</ProductCode>
+          <ProductDescription>Subscrição Anual Cloud Server</ProductDescription>
+          <Quantity>1.0</Quantity>
+          <UnitPrice>1200.00</UnitPrice>
+          <CreditAmount>1200.00</CreditAmount>
+          <Tax>
+            <TaxType>IVA</TaxType>
+            <TaxCountryRegion>PT</TaxCountryRegion>
+            <TaxCode>NOR</TaxCode>
+            <TaxPercentage>23.00</TaxPercentage>
+          </Tax>
+        </Line>
+        <DocumentTotals>
+          <TaxPayable>621.00</TaxPayable>
+          <NetTotal>2700.00</NetTotal>
+          <GrossTotal>3321.00</GrossTotal>
+        </DocumentTotals>
+      </Invoice>
+      
+      <!-- Invoice 2 (Normal) -->
+      <Invoice>
+        <InvoiceNo>FT A/2</InvoiceNo>
+        <DocumentStatus>
+          <InvoiceStatus>N</InvoiceStatus>
+          <InvoiceStatusDate>2026-02-20T14:00:00</InvoiceStatusDate>
+        </DocumentStatus>
+        <InvoiceDate>2026-02-20</InvoiceDate>
+        <InvoiceType>FT</InvoiceType>
+        <CustomerID>3</CustomerID>
+        <Line>
+          <LineNumber>1</LineNumber>
+          <ProductCode>P0003</ProductCode>
+          <ProductDescription>Monitor Pro UltraWide 34"</ProductDescription>
+          <Quantity>2.0</Quantity>
+          <UnitPrice>450.00</UnitPrice>
+          <CreditAmount>900.00</CreditAmount>
+          <Tax>
+            <TaxType>IVA</TaxType>
+            <TaxCountryRegion>PT</TaxCountryRegion>
+            <TaxCode>NOR</TaxCode>
+            <TaxPercentage>23.00</TaxPercentage>
+          </Tax>
+        </Line>
+        <DocumentTotals>
+          <TaxPayable>207.00</TaxPayable>
+          <NetTotal>900.00</NetTotal>
+          <GrossTotal>1107.00</GrossTotal>
+        </DocumentTotals>
+      </Invoice>
+
+      <!-- Invoice 3 (Cancelled - status 'A') -->
+      <Invoice>
+        <InvoiceNo>FT A/3</InvoiceNo>
+        <DocumentStatus>
+          <InvoiceStatus>A</InvoiceStatus>
+          <InvoiceStatusDate>2026-03-05T11:00:00</InvoiceStatusDate>
+        </DocumentStatus>
+        <InvoiceDate>2026-03-05</InvoiceDate>
+        <InvoiceType>FT</InvoiceType>
+        <CustomerID>1</CustomerID>
+        <Line>
+          <LineNumber>1</LineNumber>
+          <ProductCode>P0001</ProductCode>
+          <ProductDescription>Consultoria de TI Especializada - Erro de Faturação</ProductDescription>
+          <Quantity>5.0</Quantity>
+          <UnitPrice>150.00</UnitPrice>
+          <CreditAmount>750.00</CreditAmount>
+          <Tax>
+            <TaxType>IVA</TaxType>
+            <TaxCountryRegion>PT</TaxCountryRegion>
+            <TaxCode>NOR</TaxCode>
+            <TaxPercentage>23.00</TaxPercentage>
+          </Tax>
+        </Line>
+        <DocumentTotals>
+          <TaxPayable>172.50</TaxPayable>
+          <NetTotal>750.00</NetTotal>
+          <GrossTotal>922.50</GrossTotal>
+        </DocumentTotals>
+      </Invoice>
+
+      <!-- Invoice 4 (Normal but sequence jump: from 2 to 4 because 3 was cancelled? No, 3 is present. But let's check a sequence jump to 5) -->
+      <!-- Invoice No sequence jump: FT A/5 instead of A/4. So 4 is missing! -->
+      <Invoice>
+        <InvoiceNo>FT A/5</InvoiceNo>
+        <DocumentStatus>
+          <InvoiceStatus>N</InvoiceStatus>
+          <InvoiceStatusDate>2026-04-12T16:45:00</InvoiceStatusDate>
+        </DocumentStatus>
+        <InvoiceDate>2026-04-12</InvoiceDate>
+        <InvoiceType>FT</InvoiceType>
+        <CustomerID>1</CustomerID>
+        <Line>
+          <LineNumber>1</LineNumber>
+          <ProductCode>P0001</ProductCode>
+          <ProductDescription>Consultoria de TI Especializada</ProductDescription>
+          <Quantity>30.0</Quantity>
+          <UnitPrice>150.00</UnitPrice>
+          <CreditAmount>4500.00</CreditAmount>
+          <Tax>
+            <TaxType>IVA</TaxType>
+            <TaxCountryRegion>PT</TaxCountryRegion>
+            <TaxCode>NOR</TaxCode>
+            <TaxPercentage>23.00</TaxPercentage>
+          </Tax>
+        </Line>
+        <DocumentTotals>
+          <TaxPayable>1035.00</TaxPayable>
+          <NetTotal>4500.00</NetTotal>
+          <GrossTotal>5535.00</GrossTotal>
+        </DocumentTotals>
+      </Invoice>
+
+      <!-- Invoice 5 (Credit Note NC) -->
+      <Invoice>
+        <InvoiceNo>NC A/1</InvoiceNo>
+        <DocumentStatus>
+          <InvoiceStatus>N</InvoiceStatus>
+          <InvoiceStatusDate>2026-05-18T10:00:00</InvoiceStatusDate>
+        </DocumentStatus>
+        <InvoiceDate>2026-05-18</InvoiceDate>
+        <InvoiceType>NC</InvoiceType>
+        <CustomerID>2</CustomerID>
+        <Line>
+          <LineNumber>1</LineNumber>
+          <ProductCode>P0003</ProductCode>
+          <ProductDescription>Devolução Monitor Pro UltraWide 34"</ProductDescription>
+          <Quantity>1.0</Quantity>
+          <UnitPrice>450.00</UnitPrice>
+          <DebitAmount>450.00</DebitAmount>
+          <Tax>
+            <TaxType>IVA</TaxType>
+            <TaxCountryRegion>PT</TaxCountryRegion>
+            <TaxCode>NOR</TaxCode>
+            <TaxPercentage>23.00</TaxPercentage>
+          </Tax>
+        </Line>
+        <DocumentTotals>
+          <TaxPayable>-103.50</TaxPayable>
+          <NetTotal>-450.00</NetTotal>
+          <GrossTotal>-553.50</GrossTotal>
+        </DocumentTotals>
+      </Invoice>
+    </SalesInvoices>
+  </SourceDocuments>
+</AuditFile>

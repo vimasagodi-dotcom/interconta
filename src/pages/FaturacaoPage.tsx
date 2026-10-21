@@ -10,13 +10,14 @@ import {
   getCurrentMonthAvencaMovements,
   getRecurringAvencaMovements,
   fetchClients,
+  type Client,
   fetchMovements,
   triggerToconlineSync,
 } from "@/lib/clientes";
 import { toast } from "sonner";
 
 const FaturacaoPage = () => {
-  const [clients, setClients] = useState<any[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [dbMovements, setDbMovements] = useState<BillingMovement[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -51,17 +52,17 @@ const FaturacaoPage = () => {
     [clients],
   );
 
-  const all2026Avencas = useMemo(
-    () => getRecurringAvencaMovements(clients, 12).filter(m => new Date(m.date).getFullYear() >= 2026),
+  const allCurrentYearAvencas = useMemo(
+    () => getRecurringAvencaMovements(clients, 12).filter(m => new Date(m.date).getFullYear() >= new Date().getFullYear()),
     [clients]
   );
 
   const movements = useMemo(
     () =>
-      [...all2026Avencas, ...dbMovements].sort(
+      [...allCurrentYearAvencas, ...dbMovements].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       ),
-    [all2026Avencas, dbMovements],
+    [allCurrentYearAvencas, dbMovements],
   );
 
   const totalFaturado = movements

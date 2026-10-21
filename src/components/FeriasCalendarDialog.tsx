@@ -10,6 +10,8 @@ import { supabase } from "@/lib/supabase";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+type JsPdfWithAutoTable = jsPDF & { lastAutoTable?: { finalY: number } };
+
 export interface FeriasDay {
   id: string;
   colaboradorId: string;
@@ -198,7 +200,7 @@ const FeriasCalendarDialog = ({ open, onOpenChange, colaboradorId, colaboradorNa
       headStyles: { fillColor: [59, 130, 246] },
     });
 
-    const summaryY = (doc as any).lastAutoTable?.finalY + 12 || 120;
+    const summaryY = ((doc as JsPdfWithAutoTable).lastAutoTable?.finalY ?? 108) + 12;
     doc.setFontSize(12);
     doc.text("Resumo Mensal", 14, summaryY);
 
