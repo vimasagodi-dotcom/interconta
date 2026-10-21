@@ -629,5 +629,59 @@ describe("reconciliation module", () => {
       expect(extracted[1].internalDocNumber).toBe("507025");
       expect(extracted[1].amount).toBe(280.0);
     });
+
+    it("should extract user layout: Col 1 NIF, Col 2 Fornecedor, Col 4 Data, Col 7 Nº Interno, Col 8 Nº Doc, Col 10 NC, Col 11 Valor, ignoring Sub-Totals", async () => {
+      // Exato formato enviado pelo utilizador no screenshot:
+      const rows = [
+        ["117694363", "Maria do Sameiro Teixeira Maia Silverio", "FC", "23-01-2026", "5 111", "", "501035", "FR U003/147002", "V/ Fatura", "0,00", "10,47", "10,47"],
+        ["117694363", "Maria do Sameiro Teixeira Maia Silverio", "FC", "11-03-2026", "5 111", "", "503009", "FR U003/152595", "V/ Fatura", "0,00", "41,68", "52,15"],
+        ["Sub-Total:", "", "", "", "", "", "", "", "", "0,00", "901,69", "901,69"],
+        ["163609870", "Alberto Francisco Vieira de Araujo", "FC", "16-04-2026", "5 111", "", "504027", "129", "V/ Fatura", "0,00", "5,80", "5,80"],
+        ["163609870", "Alberto Francisco Vieira de Araujo", "NC", "20-04-2026", "5 111", "", "504030", "NC 12", "Devolução", "2,50", "0,00", "3,30"],
+        ["Sub-Total:", "", "", "", "", "", "", "", "", "2,50", "5,80", "3,30"],
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Balancete");
+      const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+
+      const extracted = await extractInvoicesFromAccountingExcel(buffer, "balancete_fornecedores.xlsx");
+
+      // Deve ignorar as 2 linhas de Sub-Total e extrair 4 faturas
+      expect(extracted.length).toBe(4);
+
+      // 1ª Fatura: Maria do Sameiro
+      expect(extracted[0].nif).toBe("117694363");
+      expect(extracted[0].supplierRaw).toBe("Maria do Sameiro Teixeira Maia Silverio");
+      expect(extracted[0].date).toBe("2026-01-23");
+      expect(extracted[0].internalDocNumber).toBe("501035");
+      expect(extracted[0].documentNumber).toBe("FR U003/147002");
+      expect(extracted[0].amount).toBe(10.47);
+      expect(extracted[0].amountCents).toBe(1047);
+
+      // 2ª Fatura: Maria do Sameiro (11-03-2026 deve ser 11 de Março)
+      expect(extracted[1].nif).toBe("117694363");
+      expect(extracted[1].date).toBe("2026-03-11");
+      expect(extracted[1].internalDocNumber).toBe("503009");
+      expect(extracted[1].documentNumber).toBe("FR U003/152595");
+      expect(extracted[1].amount).toBe(41.68);
+
+      // 3ª Fatura: Alberto Francisco
+      expect(extracted[2].nif).toBe("163609870");
+      expect(extracted[2].supplierRaw).toBe("Alberto Francisco Vieira de Araujo");
+      expect(extracted[2].date).toBe("2026-04-16");
+      expect(extracted[2].internalDocNumber).toBe("504027");
+      expect(extracted[2].documentNumber).toBe("129");
+      expect(extracted[2].amount).toBe(5.8);
+
+      // 4ª Fatura: Nota de crédito na 10ª coluna -> montante negativo
+      expect(extracted[3].nif).toBe("163609870");
+      expect(extracted[3].date).toBe("2026-04-20");
+      expect(extracted[3].internalDocNumber).toBe("504030");
+      expect(extracted[3].documentNumber).toBe("NC 12");
+      expect(extracted[3].amount).toBe(-2.5);
+      expect(extracted[3].amountCents).toBe(-250);
+    });
   });
 });

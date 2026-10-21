@@ -140,6 +140,11 @@ export function extractAndValidateNif(input?: string): string | undefined {
   if (!input) return undefined;
   const trimmed = input.trim();
 
+  // Se for uma data, não é NIF
+  if (/^\d{1,4}[\/\.-]\d{1,2}[\/\.-]\d{2,4}$/.test(trimmed)) {
+    return undefined;
+  }
+
   // NIF português padrão: 9 dígitos numéricos
   const digits = trimmed.replace(/\D/g, "");
   if (digits.length === 9) {
@@ -148,6 +153,11 @@ export function extractAndValidateNif(input?: string): string | undefined {
 
   // NIF ou VAT intracomunitário/estrangeiro em maiúsculas (ex: ESA08820953, A58195611, B86142809)
   const cleaned = trimmed.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  // Se for puramente números, só é válido com 9 dígitos
+  if (/^\d+$/.test(cleaned)) {
+    return cleaned.length === 9 ? cleaned : undefined;
+  }
+
   if (cleaned.length >= 8 && cleaned.length <= 14) {
     return cleaned;
   }
