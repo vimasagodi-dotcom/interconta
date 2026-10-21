@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { InvoiceItem, toCents, extractAndValidateNif, normalizeSupplierName } from "./reconciliation";
+import type { ExtractedPdfInvoice } from "./pdfExtractor";
 
 export interface ExcelColumnMapping {
   supplierCol: string;
@@ -416,3 +417,277 @@ export function extractInvoicesFromExcel(
 
   return items;
 }
+
+/**
+ * Extrai faturas de um ficheiro Excel exportado da contabilidade (Primavera, PHC, TOConline, Sage, etc.)
+ * Suporta tanto tabelas planas (com colunas Nome, Tipo, Data, Nº Interno, Nº Doc, Devoluções, Vendas, etc.)
+ * como extratos agrupados com cabeçalho de fornecedor por secção.
+ */
+export async function extractInvoicesFromAccountingExcel(
+  fileOrBuffer: File | ArrayBuffer,
+  fileName?: string
+): Promise<ExtractedPdfInvoice[]> {
+  let buffer: ArrayBuffer;
+  let actualFileName = fileName || "contabilidade.xlsx";
+
+  if (typeof window !== "undefined" && fileOrBuffer instanceof File) {
+    buffer = await fileOrBuffer.arrayBuffer();
+    actualFileName = fileOrBuffer.name;
+  } else {
+    buffer = fileOrBuffer as ArrayBuffer;
+  }
+
+  const wb = XLSX.read(new Uint8Array(buffer), { type: "array", cellDates: false });
+  const items: ExtractedPdfInvoice[] = [];
+
+  for (let sIdx = 0; sIdx < wb.SheetNames.length; sIdx++) {
+    const sheetName = wb.SheetNames[sIdx];
+    const ws = wb.Sheets[sheetName];
+    if (!ws || !ws["!ref"]) continue;
+
+    // Converter folha em matriz 2D de linhas
+    const sheetRows: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false });
+    if (!sheetRows.length) continue;
+
+    // Localizar a linha de cabeçalhos procurando palavras-chave de contabilidade
+    let headerRowIdx = -1;
+    const colIndices = {
+      supplier: -1,
+      nif: -1,
+      date: -1,
+      internalDoc: -1,
+      docNumber: -1,
+      tipo: -1,
+      descritivo: -1,
+      devolucoes: -1,
+      vendas: -1,
+      debito: -1,
+      credito: -1,
+      amount: -1,
+    };
+
+    const norm = (s: any) =>
+      String(s || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    for (let r = 0; r < Math.min(sheetRows.length, 25); r++) {
+      const row = sheetRows[r];
+      let matches = 0;
+
+      for (let c = 0; c < row.length; c++) {
+        const val = norm(row[c]);
+        if (val.includes("data") || val.includes("date") || val.includes("emissao")) matches++;
+        if (val.includes("doc") || val.includes("fatura") || val.includes("factura")) matches++;
+        if (val.includes("interno") || val.includes("numinterno") || val.includes("lancamento")) matches++;
+        if (val.includes("devoluc") || val.includes("venda") || val.includes("debito") || val.includes("credito") || val.includes("valor")) matches++;
+      }
+
+      if (matches >= 2) {
+        headerRowIdx = r;
+        break;
+      }
+    }
+
+    // Se encontrou a linha de cabeçalho, mapear cada coluna
+    if (headerRowIdx !== -1) {
+      const hRow = sheetRows[headerRowIdx];
+      for (let c = 0; c < hRow.length; c++) {
+        const h = norm(hRow[c]);
+        if (!h) continue;
+
+        if (colIndices.supplier === -1 && (h.includes("fornecedor") || h.includes("nome") || h.includes("terceiro") || h.includes("entidade"))) {
+          colIndices.supplier = c;
+        } else if (colIndices.nif === -1 && (h.includes("nif") || h.includes("contribuinte") || h.includes("vat"))) {
+          colIndices.nif = c;
+        } else if (colIndices.date === -1 && (h.includes("data") || h.includes("date") || h.includes("emissao") || h.includes("lancamento"))) {
+          colIndices.date = c;
+        } else if (colIndices.internalDoc === -1 && (h.includes("interno") || h.includes("numinterno") || h.includes("registo") || h.includes("lancamento"))) {
+          colIndices.internalDoc = c;
+        } else if (colIndices.docNumber === -1 && (h.includes("doc") || h.includes("fatura") || h.includes("factura") || h.includes("numero"))) {
+          colIndices.docNumber = c;
+        } else if (colIndices.tipo === -1 && h.includes("tipo")) {
+          colIndices.tipo = c;
+        } else if (colIndices.descritivo === -1 && (h.includes("descritivo") || h.includes("descricao"))) {
+          colIndices.descritivo = c;
+        } else if (colIndices.devolucoes === -1 && h.includes("devoluc")) {
+          colIndices.devolucoes = c;
+        } else if (colIndices.vendas === -1 && h.includes("venda")) {
+          colIndices.vendas = c;
+        } else if (colIndices.debito === -1 && h.includes("debito")) {
+          colIndices.debito = c;
+        } else if (colIndices.credito === -1 && h.includes("credito")) {
+          colIndices.credito = c;
+        } else if (colIndices.amount === -1 && (h.includes("valor") || h.includes("montante") || h.includes("total") || h.includes("saldo"))) {
+          colIndices.amount = c;
+        }
+      }
+    }
+
+    // Contexto de fornecedor para extratos agrupados
+    let currentSupplier = "";
+    let currentNif: string | undefined = undefined;
+
+    for (let r = 0; r < sheetRows.length; r++) {
+      if (r === headerRowIdx) continue;
+      const row = sheetRows[r];
+      if (!row || row.length === 0) continue;
+
+      const fullRowText = row.map((v) => String(v || "").trim()).filter(Boolean).join(" ");
+      if (!fullRowText) continue;
+
+      // Ignorar linhas de totalização
+      if (/^total\b/i.test(fullRowText) || /total geral/i.test(fullRowText) || /total da conta/i.test(fullRowText)) {
+        continue;
+      }
+
+      // Verificar se a linha declara um novo fornecedor (ex: "Conta: 22111109 - Medseghi... NIF: 513295445")
+      const isolatedNif = fullRowText.match(/\b([1235689]\d{8})\b/);
+      if (
+        fullRowText.toLowerCase().includes("conta:") ||
+        fullRowText.toLowerCase().includes("fornecedor:") ||
+        (isolatedNif && !row.some((cell) => parsePortugueseDate(cell)))
+      ) {
+        if (isolatedNif) {
+          currentNif = isolatedNif[1];
+        }
+        const cleanedSupp = fullRowText
+          .replace(/conta:\s*\d+/i, "")
+          .replace(/fornecedor:\s*/i, "")
+          .replace(/\b[1235689]\d{8}\b/g, "")
+          .replace(/nif:\s*/i, "")
+          .replace(/[-–—:()]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+        if (cleanedSupp.length > 2) {
+          currentSupplier = cleanedSupp;
+        }
+      }
+
+      // Verificar se a linha contém dados de movimento
+      let date = "";
+      if (colIndices.date !== -1 && row[colIndices.date]) {
+        date = parsePortugueseDate(row[colIndices.date]);
+      } else {
+        // Tentar encontrar célula com data
+        for (const cell of row) {
+          const parsed = parsePortugueseDate(cell);
+          if (parsed) {
+            date = parsed;
+            break;
+          }
+        }
+      }
+
+      if (!date) continue; // Sem data válida, não é uma linha de movimento contabilístico
+
+      // Obter Nº Interno
+      let internalDocNumber = "";
+      if (colIndices.internalDoc !== -1 && row[colIndices.internalDoc]) {
+        internalDocNumber = String(row[colIndices.internalDoc]).trim();
+      }
+
+      // Obter Nº Documento
+      let rawDoc = "";
+      if (colIndices.docNumber !== -1 && row[colIndices.docNumber]) {
+        rawDoc = String(row[colIndices.docNumber]).trim();
+      }
+      const documentNumber = cleanDocNumber(rawDoc) || `DOC-${r + 1}`;
+
+      // Obter Fornecedor e NIF da linha ou do contexto atual
+      let rowSupplier = "";
+      if (colIndices.supplier !== -1 && row[colIndices.supplier]) {
+        rowSupplier = String(row[colIndices.supplier]).trim();
+      }
+      let rowNif: string | undefined = undefined;
+      if (colIndices.nif !== -1 && row[colIndices.nif]) {
+        rowNif = extractAndValidateNif(String(row[colIndices.nif]));
+      }
+
+      // Se a célula do fornecedor tiver o NIF incluído (ex: "508225442 - Nuno...")
+      if (rowSupplier) {
+        const ext = extractNifAndCleanSupplier(rowSupplier);
+        if (ext.nif && !rowNif) rowNif = ext.nif;
+        if (ext.cleanName) rowSupplier = ext.cleanName;
+      }
+
+      const finalSupplier = rowSupplier || currentSupplier || "Fornecedor Contabilidade";
+      const finalNif = rowNif || currentNif;
+
+      // Obter Tipo e Descritivo
+      const tipo = colIndices.tipo !== -1 ? String(row[colIndices.tipo] || "").trim().toUpperCase() : "";
+      const desc = colIndices.descritivo !== -1 ? String(row[colIndices.descritivo] || "").toLowerCase() : "";
+
+      const isCreditNote =
+        tipo === "FD" ||
+        tipo === "NC" ||
+        desc.includes("credito") ||
+        desc.includes("devolu") ||
+        documentNumber.toUpperCase().startsWith("NC");
+
+      // Calcular montante
+      let amount = 0;
+
+      if (colIndices.devolucoes !== -1 && colIndices.vendas !== -1) {
+        const dev = parsePortugueseAmount(row[colIndices.devolucoes]);
+        const ven = parsePortugueseAmount(row[colIndices.vendas]);
+        if (dev > 0) {
+          amount = -Math.abs(dev);
+        } else if (ven > 0) {
+          amount = isCreditNote ? -Math.abs(ven) : ven;
+        } else if (dev !== 0) {
+          amount = -Math.abs(dev);
+        } else {
+          amount = ven;
+        }
+      } else if (colIndices.debito !== -1 && colIndices.credito !== -1) {
+        const deb = parsePortugueseAmount(row[colIndices.debito]);
+        const cred = parsePortugueseAmount(row[colIndices.credito]);
+        if (isCreditNote) {
+          amount = -Math.abs(deb > 0 ? deb : cred);
+        } else if (cred > 0) {
+          amount = cred;
+        } else if (deb > 0) {
+          amount = -deb;
+        }
+      } else if (colIndices.amount !== -1 && row[colIndices.amount]) {
+        const val = parsePortugueseAmount(row[colIndices.amount]);
+        amount = isCreditNote ? -Math.abs(val) : val;
+      } else {
+        // Fallback: procurar a última célula com valor monetário na linha
+        for (let c = row.length - 1; c >= 0; c--) {
+          const val = parsePortugueseAmount(row[c]);
+          if (val !== 0) {
+            amount = isCreditNote ? -Math.abs(val) : val;
+            break;
+          }
+        }
+      }
+
+      if (amount === 0 && !internalDocNumber && !rawDoc) continue;
+
+      items.push({
+        id: `contab_excel_${sIdx + 1}_${r + 1}_${items.length + 1}`,
+        supplierRaw: finalSupplier,
+        supplierNormalized: normalizeSupplierName(finalSupplier),
+        nif: extractAndValidateNif(finalNif),
+        documentNumber,
+        internalDocNumber: internalDocNumber || undefined,
+        date,
+        amount,
+        amountCents: toCents(amount),
+        source: "pdf",
+        pdfFileName: actualFileName,
+        pageNumber: r + 1,
+        confidence: 1.0,
+        lowConfidenceFields: [],
+      });
+    }
+  }
+
+  return items;
+}
+

@@ -9,6 +9,8 @@ import {
   reconcileAll,
   type InvoiceItem,
 } from "./reconciliation";
+import * as XLSX from "xlsx";
+import { extractInvoicesFromAccountingExcel } from "./excelParser";
 
 describe("reconciliation module", () => {
   describe("financial cents precision", () => {
@@ -560,6 +562,72 @@ describe("reconciliation module", () => {
       expect(excelInvs[1].isReconciled).toBe(true);
       expect(pdfInvs[0].isReconciled).toBe(true);
       expect(pdfInvs[1].isReconciled).toBe(true);
+    });
+  });
+
+  describe("extractInvoicesFromAccountingExcel", () => {
+    it("should extract flat recapitulativo accounting excel movements including devolucoes as negative", async () => {
+      // Simular um ficheiro Excel de contabilidade típico com recapitulativo
+      const rows = [
+        ["Nome", "Tipo", "Data", "Conta", "N.º Interno", "N.º Doc.", "Descritivo", "Devoluções", "Vendas"],
+        ["PAPELARIA CENTRAL, LDA", "VFR", "15-03-2024", "22111001", "100201", "FT 2024/001", "Compra de material", "", "150,50"],
+        ["PAPELARIA CENTRAL, LDA", "VNC", "20-03-2024", "22111001", "100202", "NC 2024/005", "Devolução de papel", "50,00", ""],
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Recapitulativo");
+      const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+
+      const extracted = await extractInvoicesFromAccountingExcel(buffer, "contab_test.xlsx");
+
+      expect(extracted.length).toBe(2);
+
+      // Fatura normal
+      expect(extracted[0].supplierRaw).toBe("PAPELARIA CENTRAL, LDA");
+      expect(extracted[0].documentNumber).toBe("FT 2024/001");
+      expect(extracted[0].internalDocNumber).toBe("100201");
+      expect(extracted[0].date).toBe("2024-03-15");
+      expect(extracted[0].amount).toBe(150.5);
+      expect(extracted[0].amountCents).toBe(15050);
+      expect(extracted[0].source).toBe("pdf"); // trata como fonte de contabilidade
+
+      // Nota de crédito / Devolução -> montante negativo
+      expect(extracted[1].supplierRaw).toBe("PAPELARIA CENTRAL, LDA");
+      expect(extracted[1].documentNumber).toBe("NC 2024/005");
+      expect(extracted[1].internalDocNumber).toBe("100202");
+      expect(extracted[1].date).toBe("2024-03-20");
+      expect(extracted[1].amount).toBe(-50.0);
+      expect(extracted[1].amountCents).toBe(-5000);
+    });
+
+    it("should extract grouped account extract with supplier header above movement rows", async () => {
+      const rows = [
+        ["Extrato de Movimentos da Contabilidade"],
+        ["Conta: 22111099 - Medseghi - Seguranca Lda   NIF: 513295445"],
+        ["Data", "Nº Doc.", "Nº Interno", "Débito", "Crédito"],
+        ["31/07/2026", "FT 14388", "507024", "0,00", "450,00"],
+        ["31/07/2026", "FT 14393", "507025", "0,00", "280,00"],
+        ["Total da Conta: 730,00"],
+      ];
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Extrato");
+      const buffer = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+
+      const extracted = await extractInvoicesFromAccountingExcel(buffer, "extrato_contab.xlsx");
+
+      expect(extracted.length).toBe(2);
+      expect(extracted[0].supplierRaw).toContain("Medseghi");
+      expect(extracted[0].nif).toBe("513295445");
+      expect(extracted[0].documentNumber).toBe("FT 14388");
+      expect(extracted[0].internalDocNumber).toBe("507024");
+      expect(extracted[0].amount).toBe(450.0);
+
+      expect(extracted[1].documentNumber).toBe("FT 14393");
+      expect(extracted[1].internalDocNumber).toBe("507025");
+      expect(extracted[1].amount).toBe(280.0);
     });
   });
 });

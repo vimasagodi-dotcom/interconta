@@ -62,6 +62,7 @@ import {
   parseExcelPreview,
   extractInvoicesFromExcel,
   saveSavedColumnMapping,
+  extractInvoicesFromAccountingExcel,
 } from "@/lib/excelParser";
 import {
   ExtractedPdfInvoice,
@@ -142,20 +143,24 @@ export default function ReconciliacaoPage() {
 
   const handlePdfDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const files = Array.from(e.dataTransfer.files).filter((f) => f.name.match(/\.pdf$/i));
+    const files = Array.from(e.dataTransfer.files).filter((f) =>
+      f.name.match(/\.(pdf|xlsx|xls|csv)$/i)
+    );
     if (files.length === 0) {
-      toast.error("Por favor carregue ficheiros com extensão .pdf.");
+      toast.error("Por favor carregue ficheiros com extensão .pdf, .xlsx, .xls ou .csv.");
       return;
     }
     setPdfFiles((prev) => [...prev, ...files]);
-    toast.success(`${files.length} ficheiro(s) PDF adicionado(s).`);
+    toast.success(`${files.length} ficheiro(s) da contabilidade adicionado(s).`);
   };
 
   const handlePdfSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
-    const files = Array.from(e.target.files).filter((f) => f.name.match(/\.pdf$/i));
+    const files = Array.from(e.target.files).filter((f) =>
+      f.name.match(/\.(pdf|xlsx|xls|csv)$/i)
+    );
     setPdfFiles((prev) => [...prev, ...files]);
-    toast.success(`${files.length} ficheiro(s) PDF adicionado(s).`);
+    toast.success(`${files.length} ficheiro(s) da contabilidade adicionado(s).`);
   };
 
   const removePdfFile = (index: number) => {
@@ -203,28 +208,54 @@ export default function ReconciliacaoPage() {
 
   const startExtraction = async () => {
     if (!excelFile || !excelPreview) {
-      toast.error("Por favor carregue o ficheiro Excel de faturas dos fornecedores.");
+      toast.error("Por favor carregue o ficheiro e-Fatura dos fornecedores.");
       return;
     }
     if (pdfFiles.length === 0) {
-      toast.error("Por favor carregue pelo menos um ficheiro PDF da contabilidade.");
+      toast.error("Por favor carregue pelo menos um ficheiro PDF ou Excel da contabilidade.");
       return;
     }
 
     setIsProcessing(true);
     try {
-      // 1. Extrair faturas do Excel com o mapeamento atual
+      // 1. Extrair faturas do e-Fatura com o mapeamento atual
       const parsedExcel = extractInvoicesFromExcel(excelPreview.rawRows, columnMapping);
       setExcelInvoices(parsedExcel);
 
-      // 2. Extrair faturas dos PDFs com monitorização de progresso
-      const parsedPdfs = await extractInvoicesFromMultiplePdfs(pdfFiles, (p) => {
-        setExtractionProgress(p);
-      });
-      setPdfInvoices(parsedPdfs);
+      // 2. Extrair faturas da contabilidade (PDFs e/ou Excels)
+      const pdfsOnly = pdfFiles.filter((f) => f.name.match(/\.pdf$/i));
+      const excelsOnly = pdfFiles.filter((f) => f.name.match(/\.(xlsx|xls|csv)$/i));
+
+      let allAccountingInvoices: ExtractedPdfInvoice[] = [];
+
+      // Processar PDFs se existirem
+      if (pdfsOnly.length > 0) {
+        const parsedPdfs = await extractInvoicesFromMultiplePdfs(pdfsOnly, (p) => {
+          setExtractionProgress(p);
+        });
+        allAccountingInvoices = [...allAccountingInvoices, ...parsedPdfs];
+      }
+
+      // Processar ficheiros Excel da contabilidade se existirem
+      for (let i = 0; i < excelsOnly.length; i++) {
+        const ef = excelsOnly[i];
+        setExtractionProgress({
+          currentFile: pdfsOnly.length + i + 1,
+          totalFiles: pdfFiles.length,
+          fileName: ef.name,
+          page: 1,
+          totalPages: 1,
+          stage: `A ler folhas e linhas do ficheiro Excel ${ef.name}...`,
+          percent: Math.round(((pdfsOnly.length + i + 1) / pdfFiles.length) * 100),
+        });
+        const parsedAccountingExcel = await extractInvoicesFromAccountingExcel(ef);
+        allAccountingInvoices = [...allAccountingInvoices, ...parsedAccountingExcel];
+      }
+
+      setPdfInvoices(allAccountingInvoices);
 
       toast.success(
-        `Extração concluída: ${parsedExcel.length} faturas do Excel e ${parsedPdfs.length} faturas da Contabilidade.`
+        `Extração concluída: ${parsedExcel.length} faturas do e-Fatura e ${allAccountingInvoices.length} faturas da Contabilidade.`
       );
       setCurrentStep(2);
     } catch (err: any) {
@@ -375,7 +406,7 @@ export default function ReconciliacaoPage() {
               Reconciliação de Faturas de Fornecedores
             </h1>
             <p className="text-sm text-muted-foreground">
-              Cruze as faturas em Excel com as faturas lançadas na contabilidade (PDFs) e detete divergências por dia.
+              Cruze as faturas do e-Fatura (Excel) com as faturas lançadas na contabilidade (PDF ou Excel) e detete divergências.
             </p>
           </div>
         </div>
@@ -510,7 +541,7 @@ export default function ReconciliacaoPage() {
               )}
             </div>
 
-            {/* CARD B: RECONCILIAÇÃO CONTABILIDADE (PDF) */}
+            {/* CARD B: RECONCILIAÇÃO CONTABILIDADE (PDF OU EXCEL) */}
             <div className="elevated-card rounded-2xl p-6 border border-border flex flex-col justify-between h-full">
               <div>
                 <div className="flex items-center gap-3 mb-4">
@@ -519,10 +550,10 @@ export default function ReconciliacaoPage() {
                   </div>
                   <div>
                     <h2 className="font-semibold text-base text-foreground">
-                      Reconciliação contabilidade (PDF)
+                      Reconciliação contabilidade (PDF ou Excel)
                     </h2>
                     <p className="text-xs text-muted-foreground">
-                      Um ou múltiplos PDFs com as faturas lançadas na contabilidade
+                      Ficheiro(s) em PDF ou Excel (.xlsx, .xls, .csv) com as faturas da contabilidade
                     </p>
                   </div>
                 </div>
@@ -535,15 +566,15 @@ export default function ReconciliacaoPage() {
                 >
                   <Upload className="w-10 h-10 text-muted-foreground mb-3" />
                   <p className="text-sm font-medium text-foreground">
-                    Arraste os ficheiros PDF para aqui
+                    Arraste os ficheiros PDF ou Excel para aqui
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    ou clique para selecionar do computador (suporta seleção múltipla)
+                    ou clique para selecionar (.pdf, .xlsx, .xls, .csv - suporta múltiplos ficheiros)
                   </p>
                   <input
                     id="pdf-input-upload"
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.xlsx,.xls,.csv"
                     multiple
                     className="hidden"
                     onChange={handlePdfSelect}
@@ -553,7 +584,7 @@ export default function ReconciliacaoPage() {
                 {pdfFiles.length > 0 && (
                   <div className="mt-4 space-y-2 max-h-[160px] overflow-y-auto pr-1">
                     <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground px-1">
-                      <span>{pdfFiles.length} documento(s) PDF selecionado(s):</span>
+                      <span>{pdfFiles.length} documento(s) da contabilidade selecionado(s):</span>
                       <button
                         onClick={() => setPdfFiles([])}
                         className="text-destructive hover:underline"
@@ -561,26 +592,33 @@ export default function ReconciliacaoPage() {
                         Limpar todos
                       </button>
                     </div>
-                    {pdfFiles.map((file, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-card border border-border/80 rounded-lg p-2.5 flex items-center justify-between text-xs"
-                      >
-                        <div className="flex items-center gap-2 truncate pr-2">
-                          <FileText className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                          <span className="truncate text-foreground font-medium">{file.name}</span>
-                          <span className="text-muted-foreground">
-                            ({(file.size / 1024).toFixed(0)} KB)
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => removePdfFile(idx)}
-                          className="text-muted-foreground hover:text-destructive"
+                    {pdfFiles.map((file, idx) => {
+                      const isExcel = file.name.match(/\.(xlsx|xls|csv)$/i);
+                      return (
+                        <div
+                          key={idx}
+                          className="bg-card border border-border/80 rounded-lg p-2.5 flex items-center justify-between text-xs"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            {isExcel ? (
+                              <FileSpreadsheet className="w-3.5 h-3.5 text-accent flex-shrink-0" />
+                            ) : (
+                              <FileText className="w-3.5 h-3.5 text-info flex-shrink-0" />
+                            )}
+                            <span className="truncate text-foreground font-medium">{file.name}</span>
+                            <span className="text-muted-foreground">
+                              ({(file.size / 1024).toFixed(0)} KB)
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => removePdfFile(idx)}
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -750,13 +788,13 @@ export default function ReconciliacaoPage() {
             </div>
           </div>
 
-          {/* SECÇÃO 2: TABELA EDITÁVEL DOS DADOS EXTRAÍDOS DOS PDFS */}
+          {/* SECÇÃO 2: TABELA EDITÁVEL DOS DADOS EXTRAÍDOS DA CONTABILIDADE (PDF / EXCEL) */}
           <div className="elevated-card rounded-2xl p-6 border border-border space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
                   <FileText className="w-5 h-5 text-info" />
-                  Revisão dos Dados Extraídos dos PDFs
+                  Revisão dos Dados da Contabilidade (PDF / Excel)
                 </h2>
                 <p className="text-xs text-muted-foreground">
                   Pode corrigir qualquer campo antes da reconciliação. Campos a{" "}
@@ -767,7 +805,7 @@ export default function ReconciliacaoPage() {
                 <div className="relative w-56">
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Filtrar faturas PDF..."
+                    placeholder="Filtrar faturas da contabilidade..."
                     value={pdfSearchTerm}
                     onChange={(e) => setPdfSearchTerm(e.target.value)}
                     className="pl-8 h-8 text-xs"
@@ -793,17 +831,18 @@ export default function ReconciliacaoPage() {
                     <th className="py-2.5 px-2 text-center w-12 bg-muted">Ação</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-border/60">
+                <tbody className="divide-y border-border/60">
                   {displayedPdfInvoices.map((inv) => {
                     const isLowConfSupplier = inv.lowConfidenceFields?.includes("supplierRaw");
                     const isLowConfDoc = inv.lowConfidenceFields?.includes("documentNumber");
                     const isLowConfDate = inv.lowConfidenceFields?.includes("date");
                     const isLowConfAmount = inv.lowConfidenceFields?.includes("amount");
+                    const isExcelOrigin = inv.pdfFileName?.match(/\.(xlsx|xls|csv)$/i);
 
                     return (
                       <tr key={inv.id} className="hover:bg-muted/30 transition-colors">
                         <td className="py-2 px-3 text-[11px] text-muted-foreground whitespace-nowrap">
-                          {inv.pdfFileName} (pág. {inv.pageNumber})
+                          {inv.pdfFileName} ({isExcelOrigin ? `Linha ${inv.pageNumber}` : `pág. ${inv.pageNumber}`})
                           {inv.usedOcr && (
                             <Badge className="ml-1 text-[9px] py-0 px-1 bg-warning/10 text-warning border-warning/20">
                               OCR
@@ -923,7 +962,7 @@ export default function ReconciliacaoPage() {
               </div>
 
               <div>
-                <Label className="text-xs font-semibold">Corresponde a na Contabilidade (PDF)</Label>
+                <Label className="text-xs font-semibold">Corresponde a na Contabilidade (PDF / Excel)</Label>
                 <Select
                   onValueChange={(val) => {
                     toast.info(`Fornecedor selecionado: ${val}`);
@@ -1150,7 +1189,7 @@ export default function ReconciliacaoPage() {
                     <th className="py-3 px-3 text-right">Total Excel</th>
                     <th className="py-3 px-3 text-right">Total Contabilidade</th>
                     <th className="py-3 px-3 text-right">Diferença</th>
-                    <th className="py-3 px-3 text-center">Faturas (Excel / PDF)</th>
+                    <th className="py-3 px-3 text-center">Faturas (e-Fatura / Contab.)</th>
                     <th className="py-3 px-3 text-center">Estado</th>
                     <th className="py-3 px-4 text-center">Ações</th>
                   </tr>
