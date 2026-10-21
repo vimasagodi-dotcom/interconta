@@ -580,17 +580,25 @@ export async function extractInvoicesFromAccountingExcel(
       }
 
       // --- DETEÇÃO DA LINHA DE MOVIMENTO CONTABILÍSTICO ---
-      // Localizar o NIF na linha (1ª coluna ou uma das primeiras colunas)
+      // 1. NIF (1ª coluna, index 0):
       let rowNif: string | undefined = undefined;
       let nifColIdx = -1;
 
-      if (colIndices.nif !== -1 && row[colIndices.nif]) {
+      if (colIndices.nif !== -1 && row[colIndices.nif] !== undefined) {
         rowNif = extractAndValidateNif(String(row[colIndices.nif]));
         nifColIdx = colIndices.nif;
       }
 
+      if (!rowNif && row[0] !== undefined) {
+        const c0 = String(row[0]).trim();
+        const cand = extractAndValidateNif(c0) || (c0.replace(/\D/g, "").length === 9 ? c0.replace(/\D/g, "") : undefined);
+        if (cand) {
+          rowNif = cand;
+          nifColIdx = 0;
+        }
+      }
+
       if (!rowNif) {
-        // Verificar se a coluna 0 (1ª coluna) ou coluna 1 tem um NIF válido de 9 dígitos
         for (let c = 0; c < Math.min(row.length, 3); c++) {
           if (parsePortugueseDate(row[c], true)) continue;
           const candidate = extractAndValidateNif(String(row[c] || ""));
@@ -602,12 +610,15 @@ export async function extractInvoicesFromAccountingExcel(
         }
       }
 
-      // Localizar Data (4ª coluna no layout padrão, ou coluna mapeada, ou qualquer célula com data)
+      // 2. Data (4ª coluna, index 3):
       let date = "";
       if (colIndices.date !== -1 && row[colIndices.date]) {
         date = parsePortugueseDate(row[colIndices.date], true);
       }
-      if (!date && nifColIdx !== -1 && row[nifColIdx + 3]) {
+      if (!date && row[3] !== undefined) {
+        date = parsePortugueseDate(row[3], true);
+      }
+      if (!date && nifColIdx !== -1 && row[nifColIdx + 3] !== undefined) {
         date = parsePortugueseDate(row[nifColIdx + 3], true);
       }
       if (!date) {
@@ -622,12 +633,18 @@ export async function extractInvoicesFromAccountingExcel(
 
       if (!date) continue; // Sem data válida, não é uma linha de movimento contabilístico
 
-      // Localizar Fornecedor (2ª coluna no layout padrão)
+      // 3. Fornecedor (2ª coluna, index 1):
       let rowSupplier = "";
       if (colIndices.supplier !== -1 && row[colIndices.supplier]) {
         rowSupplier = String(row[colIndices.supplier]).trim();
       }
-      if (!rowSupplier && nifColIdx !== -1 && row[nifColIdx + 1]) {
+      if (!rowSupplier && row[1] !== undefined) {
+        const candidate = String(row[1]).trim();
+        if (candidate.length > 2 && !parsePortugueseDate(candidate, true) && isNaN(Number(candidate))) {
+          rowSupplier = candidate;
+        }
+      }
+      if (!rowSupplier && nifColIdx !== -1 && row[nifColIdx + 1] !== undefined) {
         const candidate = String(row[nifColIdx + 1]).trim();
         if (candidate.length > 2 && !parsePortugueseDate(candidate, true) && isNaN(Number(candidate))) {
           rowSupplier = candidate;
@@ -644,40 +661,54 @@ export async function extractInvoicesFromAccountingExcel(
       const finalSupplier = rowSupplier || currentSupplier || "Fornecedor Contabilidade";
       const finalNif = rowNif || currentNif;
 
-      // Localizar Nº Interno (7ª coluna no layout padrão, ou seja index nifColIdx + 6)
+      // 4. Nº Interno (7ª coluna, index 6):
       let internalDocNumber = "";
-      if (colIndices.internalDoc !== -1 && row[colIndices.internalDoc]) {
+      if (colIndices.internalDoc !== -1 && row[colIndices.internalDoc] !== undefined) {
         internalDocNumber = String(row[colIndices.internalDoc]).trim();
       }
-      if (!internalDocNumber && nifColIdx !== -1 && row[nifColIdx + 6] !== undefined && row[nifColIdx + 6] !== "") {
+      if (!internalDocNumber && row[6] !== undefined && String(row[6]).trim() !== "") {
+        internalDocNumber = String(row[6]).trim();
+      }
+      if (!internalDocNumber && nifColIdx !== -1 && row[nifColIdx + 6] !== undefined && String(row[nifColIdx + 6]).trim() !== "") {
         internalDocNumber = String(row[nifColIdx + 6]).trim();
       }
 
-      // Localizar Nº Documento (8ª coluna no layout padrão, ou seja index nifColIdx + 7)
+      // 5. Nº Documento (9ª coluna, index 8 - com fallback para 8ª coluna index 7):
       let rawDoc = "";
-      if (colIndices.docNumber !== -1 && row[colIndices.docNumber]) {
+      if (colIndices.docNumber !== -1 && row[colIndices.docNumber] !== undefined) {
         rawDoc = String(row[colIndices.docNumber]).trim();
       }
-      if (!rawDoc && nifColIdx !== -1 && row[nifColIdx + 7] !== undefined && row[nifColIdx + 7] !== "") {
+      // Prioridade 1: 9ª coluna (index 8) conforme especificado pelo utilizador
+      if (!rawDoc && row[8] !== undefined && String(row[8]).trim() !== "") {
+        rawDoc = String(row[8]).trim();
+      }
+      // Prioridade 2: 8ª coluna (index 7)
+      if (!rawDoc && row[7] !== undefined && String(row[7]).trim() !== "") {
+        rawDoc = String(row[7]).trim();
+      }
+      if (!rawDoc && nifColIdx !== -1 && row[nifColIdx + 8] !== undefined && String(row[nifColIdx + 8]).trim() !== "") {
+        rawDoc = String(row[nifColIdx + 8]).trim();
+      }
+      if (!rawDoc && nifColIdx !== -1 && row[nifColIdx + 7] !== undefined && String(row[nifColIdx + 7]).trim() !== "") {
         rawDoc = String(row[nifColIdx + 7]).trim();
       }
-      const documentNumber = cleanDocNumber(rawDoc) || `DOC-${r + 1}`;
+      const documentNumber = cleanDocNumber(rawDoc) || (internalDocNumber ? `INT-${internalDocNumber}` : `DOC-${r + 1}`);
 
-      // Localizar Tipo de Documento e Descritivo (3ª coluna tipo, 9ª coluna descritivo)
+      // 6. Tipo de Documento (3ª coluna, index 2) e Descritivo (10ª coluna, index 9):
       let tipo = "";
       if (colIndices.tipo !== -1 && row[colIndices.tipo]) {
         tipo = String(row[colIndices.tipo]).trim().toUpperCase();
       }
-      if (!tipo && nifColIdx !== -1 && row[nifColIdx + 2]) {
-        tipo = String(row[nifColIdx + 2]).trim().toUpperCase();
+      if (!tipo && row[2] !== undefined) {
+        tipo = String(row[2]).trim().toUpperCase();
       }
 
       let desc = "";
       if (colIndices.descritivo !== -1 && row[colIndices.descritivo]) {
         desc = String(row[colIndices.descritivo]).toLowerCase();
       }
-      if (!desc && nifColIdx !== -1 && row[nifColIdx + 8]) {
-        desc = String(row[nifColIdx + 8]).toLowerCase();
+      if (!desc && row[9] !== undefined) {
+        desc = String(row[9]).toLowerCase();
       }
 
       const isCreditNote =
@@ -688,22 +719,36 @@ export async function extractInvoicesFromAccountingExcel(
         desc.includes("devolu") ||
         documentNumber.toUpperCase().startsWith("NC");
 
-      // Localizar Montantes (10ª coluna = Nota de Crédito / Devoluções; 11ª coluna = Valor Fatura / Vendas)
+      // 7. Montantes: Nota de Crédito (11ª coluna, index 10) e Valor Fatura (12ª coluna, index 11):
       let amount = 0;
+      let ncVal = 0;
+      let fatVal = 0;
 
-      const ncIdx = colIndices.devolucoes !== -1 ? colIndices.devolucoes : (nifColIdx !== -1 ? nifColIdx + 9 : (row.length >= 11 ? 9 : -1));
-      const fatIdx = colIndices.vendas !== -1 ? colIndices.vendas : (nifColIdx !== -1 ? nifColIdx + 10 : (row.length >= 11 ? 10 : -1));
+      if (colIndices.devolucoes !== -1 && row[colIndices.devolucoes] !== undefined) {
+        ncVal = parsePortugueseAmount(row[colIndices.devolucoes]);
+      }
+      if (colIndices.vendas !== -1 && row[colIndices.vendas] !== undefined) {
+        fatVal = parsePortugueseAmount(row[colIndices.vendas]);
+      }
 
-      if (ncIdx !== -1 && fatIdx !== -1 && (row[ncIdx] !== undefined || row[fatIdx] !== undefined)) {
-        const ncVal = parsePortugueseAmount(row[ncIdx]);
-        const fatVal = parsePortugueseAmount(row[fatIdx]);
-
-        if (ncVal !== 0) {
-          // Nota de crédito / devolução -> SEMPRE negativo
-          amount = -Math.abs(ncVal);
-        } else if (fatVal !== 0) {
-          amount = isCreditNote ? -Math.abs(fatVal) : Math.abs(fatVal);
+      // Se não mapeado por cabeçalhos de texto:
+      if (colIndices.devolucoes === -1 && colIndices.vendas === -1) {
+        if (row.length >= 12) {
+          // Layout do utilizador (12+ colunas): 11ª coluna (index 10) = NC, 12ª coluna (index 11) = Valor Fatura
+          ncVal = parsePortugueseAmount(row[10]);
+          fatVal = parsePortugueseAmount(row[11]);
+        } else if (row.length >= 10) {
+          // Layout alternativo de 10/11 colunas: 10ª coluna (index 9) = NC, 11ª coluna (index 10) = Valor Fatura
+          ncVal = parsePortugueseAmount(row[9]);
+          fatVal = parsePortugueseAmount(row[10]);
         }
+      }
+
+      if (ncVal !== 0) {
+        // Nota de crédito / devolução -> SEMPRE negativo
+        amount = -Math.abs(ncVal);
+      } else if (fatVal !== 0) {
+        amount = isCreditNote ? -Math.abs(fatVal) : Math.abs(fatVal);
       } else if (colIndices.debito !== -1 && colIndices.credito !== -1) {
         const deb = parsePortugueseAmount(row[colIndices.debito]);
         const cred = parsePortugueseAmount(row[colIndices.credito]);
@@ -714,29 +759,16 @@ export async function extractInvoicesFromAccountingExcel(
         } else if (deb > 0) {
           amount = -deb;
         }
-      } else if (colIndices.amount !== -1 && row[colIndices.amount]) {
+      } else if (colIndices.amount !== -1 && row[colIndices.amount] !== undefined) {
         const val = parsePortugueseAmount(row[colIndices.amount]);
         amount = isCreditNote ? -Math.abs(val) : val;
       } else {
-        // Fallback: se linha tiver pelo menos 11 colunas, verificar colunas 10 (idx 9) e 11 (idx 10)
-        if (row.length >= 11) {
-          const ncVal = parsePortugueseAmount(row[9]);
-          const fatVal = parsePortugueseAmount(row[10]);
-          if (ncVal !== 0) {
-            amount = -Math.abs(ncVal);
-          } else if (fatVal !== 0) {
-            amount = isCreditNote ? -Math.abs(fatVal) : Math.abs(fatVal);
-          }
-        }
-
-        // Se ainda for 0, procurar a última célula antes do saldo acumulado
-        if (amount === 0) {
-          for (let c = row.length - 2; c >= 0; c--) {
-            const val = parsePortugueseAmount(row[c]);
-            if (val !== 0) {
-              amount = isCreditNote ? -Math.abs(val) : val;
-              break;
-            }
+        // Fallback: procurar penúltima célula antes do saldo acumulado
+        for (let c = row.length - 2; c >= Math.max(0, row.length - 5); c--) {
+          const val = parsePortugueseAmount(row[c]);
+          if (val !== 0) {
+            amount = isCreditNote ? -Math.abs(val) : val;
+            break;
           }
         }
       }
