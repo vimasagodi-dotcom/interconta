@@ -49,50 +49,26 @@ export const MICRODIGITAL_SHEET_NAME = "dia332019010269";
 export const MICRODIGITAL_FILE_NAME = `${MICRODIGITAL_SHEET_NAME}.xls`;
 
 export const MICRODIGITAL_HEADERS = [
-  "CDIARIO",
-  "NDIA",
-  "NMES",
-  "NANO",
-  "NINTERNO",
-  "CDOCUMENTO",
-  "CCONTA",
-  "NDEBITO",
-  "NCREDITO",
-  "CDESCR",
-  "CDESCRITIVO",
-  "CTIPODESCR",
-  "CCONTRIBUINTE",
-  "CPAIS",
-  "CINTRA",
-  "CUTI",
-  "LIVA",
-  "NDIAF",
-  "NMESF",
-  "NANOF",
-];
-
-// Formatos por coluna exigidos pela folha oculta "Activex" do modelo Microdigital
-const ACTIVEX_FORMATS: Array<[string, string, string]> = [
-  ["A1", "#####0", "2"],
-  ["B1", "#####0", "2"],
-  ["C1", "#####0", "2"],
-  ["D1", "#####0", "2"],
-  ["E1", "#####0", "2"],
-  ["F1", "#####0", "0"],
-  ["G1", "#####0", "0"],
-  ["H1", "#,##0.00", "2"],
-  ["I1", "#,##0.00", "2"],
-  ["J1", "#####0", "2"],
-  ["K1", "@", "0"],
-  ["L1", "@", "0"],
-  ["M1", "@", "0"],
-  ["N1", "@", "0"],
-  ["O1", "@", "0"],
-  ["P1", "@", "0"],
-  ["Q1", "#####0", "0"],
-  ["R1", "#####0", "2"],
-  ["S1", "#####0", "2"],
-  ["T1", "#####0", "2"],
+  "'CDIARIO",
+  "'NDIA",
+  "'NMES",
+  "'NANO",
+  "'NINTERNO",
+  "'CDOCUMENTO",
+  "'CCONTA",
+  "'NDEBITO",
+  "'NCREDITO",
+  "'CDESCR",
+  "'CDESCRITIVO",
+  "'CTIPODESCR",
+  "'CCONTRIBUINTE",
+  "'CPAIS",
+  "'CINTRA",
+  "'CUTI",
+  "'LIVA",
+  "'NDIAF",
+  "'NMESF",
+  "'NANOF",
 ];
 
 const pad = (n: number, len: number) => String(n).padStart(len, "0");
@@ -259,33 +235,15 @@ export function toMicrodigitalRows(lines: ImportLine[], config: BankImportConfig
   ]);
 }
 
-/** Constrói o livro .xls idêntico ao modelo de importação Microdigital. */
+/** Constrói o livro .xls com a folha única de dados ("dia332019010269"). */
 export function buildMicrodigitalWorkbook(lines: ImportLine[], config: BankImportConfig): XLSX.WorkBook {
   const wb = XLSX.utils.book_new();
 
-  // Folha oculta "Activex" (metadados do modelo Microdigital)
-  const activex: (string | number | null)[][] = Array.from({ length: 59 }, () => [null, null, null, null]);
-  activex[0] = ["B", null, null, null];
-  activex[1] = [MICRODIGITAL_SHEET_NAME, "40", "59", 0];
-  activex[3] = ["  de 30-12-1899", null, null, null];
-  activex[5] = ["  Data de execução: 30-12-1899", null, null, null];
-  ACTIVEX_FORMATS.forEach((f, i) => {
-    activex[39 + i] = [f[0], f[1], f[2], null];
-  });
-  const wsActivex = XLSX.utils.aoa_to_sheet(activex);
-  XLSX.utils.book_append_sheet(wb, wsActivex, "Activex");
-
-  // Folha de dados
+  // Apenas a folha que tem valores, sem mais nenhuma folha
   const wsData = XLSX.utils.aoa_to_sheet([MICRODIGITAL_HEADERS, ...toMicrodigitalRows(lines, config)]);
   wsData["!cols"] = [5, 5, 6, 5, 10, 13, 8, 10, 10, 8, 32, 12, 15, 6, 7, 5, 5, 6, 7, 7].map((wch) => ({ wch }));
   XLSX.utils.book_append_sheet(wb, wsData, MICRODIGITAL_SHEET_NAME);
 
-  wb.Workbook = {
-    Sheets: [
-      { name: "Activex", Hidden: 1 },
-      { name: MICRODIGITAL_SHEET_NAME, Hidden: 0 },
-    ],
-  };
   return wb;
 }
 

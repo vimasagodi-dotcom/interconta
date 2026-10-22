@@ -54,7 +54,8 @@ describe.skipIf(!hasFiles)("bankImport vs ficheiro real Microdigital", () => {
 
     const wbRef = XLSX.readFile(ref);
     const refRows = XLSX.utils.sheet_to_json(wbRef.Sheets[MICRODIGITAL_SHEET_NAME], { header: 1, raw: true, defval: "" }) as unknown[][];
-    expect(refRows[0]).toEqual(MICRODIGITAL_HEADERS);
+    expect(MICRODIGITAL_HEADERS[0]).toBe("'CDIARIO");
+    expect(MICRODIGITAL_HEADERS.map((h) => h.replace(/^'/, ""))).toEqual(refRows[0]);
     const expected = refRows.slice(1);
     expect(generated.length).toBe(expected.length);
 
@@ -73,12 +74,12 @@ describe.skipIf(!hasFiles)("bankImport vs ficheiro real Microdigital", () => {
       expect(normalizedRow).toEqual(exp);
     });
 
-    // O ficheiro gerado em .xls volta a ler-se com a folha de dados e a folha oculta Activex
+    // O ficheiro gerado em .xls tem APENAS a folha que tem valores (sem Activex nem mais nenhuma folha)
     const out = XLSX.write(buildMicrodigitalWorkbook(buildImportLines(movements, config), config), { bookType: "xls", type: "buffer" });
     const back = XLSX.read(out, { type: "buffer" });
-    expect(back.SheetNames).toEqual(["Activex", MICRODIGITAL_SHEET_NAME]);
-    expect(back.Workbook?.Sheets?.[0]?.Hidden).toBe(1);
+    expect(back.SheetNames).toEqual([MICRODIGITAL_SHEET_NAME]);
     const backRows = XLSX.utils.sheet_to_json(back.Sheets[MICRODIGITAL_SHEET_NAME], { header: 1, raw: true, defval: "" }) as unknown[][];
+    expect(backRows[0][0]).toBe("'CDIARIO");
     expect(backRows[1]).toEqual([9, 6, 1, 2026, 901001, 901001, 1211, 30152.22, 0, 18, "TRANSF SEPA -RESIWAY - SOLUCOE", "", "", "", "", "", 0, 6, 1, 2026]);
   });
 });

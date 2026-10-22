@@ -209,20 +209,24 @@ export function cleanDocNumber(str: string): string {
  * Suporta formatos portugueses: DD/MM/AAAA, DD-MM-AAAA, AAAA-MM-DD, datas seriais do Excel
  * e formato do portal das Finanças / e-Fatura: M/D/YY (ex: 1/23/26 -> 2026-01-23)
  */
-export function parsePortugueseDate(value: any, preferDayFirst = false): string {
+export function parsePortugueseDate(value: any, preferDayFirst = true): string {
   if (!value) return "";
 
-  // Caso seja número de série do Excel (ex: 45352)
+  // Caso seja número de série do Excel (ex: 45352 ou com fração de tempo)
   if (typeof value === "number") {
-    const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+    const days = Math.round(value - 25569);
+    const date = new Date(days * 86400 * 1000);
     if (!isNaN(date.getTime())) {
       return date.toISOString().split("T")[0];
     }
   }
 
-  // Caso seja Date do JavaScript
+  // Caso seja Date do JavaScript (evitar desvio de timezone UTC que retrocede 1 dia)
   if (value instanceof Date && !isNaN(value.getTime())) {
-    return value.toISOString().split("T")[0];
+    const y = value.getFullYear();
+    const m = String(value.getMonth() + 1).padStart(2, "0");
+    const d = String(value.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   }
 
   const str = String(value).trim();
@@ -250,17 +254,16 @@ export function parsePortugueseDate(value: any, preferDayFirst = false): string 
       day = String(p1).padStart(2, "0");
       month = String(p2).padStart(2, "0");
     } else if (p2 > 12) {
-      // Se o segundo número > 12, é certamente MM/DD/YYYY (ex: 1/23/26 do e-Fatura)
+      // Se o segundo número > 12, é certamente MM/DD/YYYY (ex: 1/23/26)
       month = String(p1).padStart(2, "0");
       day = String(p2).padStart(2, "0");
     } else {
       // Se ambos <= 12:
-      // Se tiver traço '-' (ex: 11-03-2026) ou preferDayFirst = true, é formato português DD-MM-YYYY
+      // Em Portugal (e-Fatura CSV e contabilidade), o formato padrão é DD/MM/AAAA ou DD-MM-AAAA
       if (preferDayFirst || str.includes("-")) {
         day = String(p1).padStart(2, "0");
         month = String(p2).padStart(2, "0");
       } else {
-        // No e-Fatura da AT em formato americano M/D/YY com barras '/'
         month = String(p1).padStart(2, "0");
         day = String(p2).padStart(2, "0");
       }
@@ -271,7 +274,10 @@ export function parsePortugueseDate(value: any, preferDayFirst = false): string 
 
   const parsed = new Date(str);
   if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split("T")[0];
+    const y = parsed.getFullYear();
+    const m = String(parsed.getMonth() + 1).padStart(2, "0");
+    const d = String(parsed.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   }
 
   return "";
@@ -280,9 +286,17 @@ export function parsePortugueseDate(value: any, preferDayFirst = false): string 
 /**
  * Lê o ficheiro Excel/CSV e retorna os cabeçalhos e as linhas para pré-visualização.
  */
-export async function parseExcelPreview(file: File): Promise<ExcelParsedPreview> {
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
+export async function parseExcelPreview(file: File | any): Promise<ExcelParsedPreview> {
+  let buffer: ArrayBuffer;
+  if (typeof file.arrayBuffer === "function") {
+    buffer = await file.arrayBuffer();
+  } else if (typeof (file as any).text === "function") {
+    const text = await (file as any).text();
+    buffer = new TextEncoder().encode(text).buffer;
+  } else {
+    buffer = file as ArrayBuffer;
+  }
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: false, raw: true });
 
   if (!workbook.SheetNames.length) {
     throw new Error("O ficheiro Excel não contém nenhuma folha de cálculo.");
@@ -443,7 +457,7 @@ export async function extractInvoicesFromAccountingExcel(
     buffer = fileOrBuffer as ArrayBuffer;
   }
 
-  const wb = XLSX.read(new Uint8Array(buffer), { type: "array", cellDates: false });
+  const wb = XLSX.read(new Uint8Array(buffer), { type: "array", cellDates: false, raw: true });
   const items: ExtractedPdfInvoice[] = [];
 
   for (let sIdx = 0; sIdx < wb.SheetNames.length; sIdx++) {

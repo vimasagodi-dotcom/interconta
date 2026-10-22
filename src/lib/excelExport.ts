@@ -106,7 +106,7 @@ export async function exportOriginalExcelHighlighted(
 }> {
   const rawBuffer = await originalFile.arrayBuffer();
   const buffer = new Uint8Array(rawBuffer);
-  const wb = XLSX.read(buffer, { type: "array" });
+  const wb = XLSX.read(buffer, { type: "array", cellDates: false, raw: true });
 
   if (!wb.SheetNames.length) {
     throw new Error("O ficheiro original não contém folhas de cálculo.");
@@ -184,12 +184,13 @@ export async function exportOriginalExcelHighlighted(
         if (typeof cell.v === "number") {
           cell.z = "dd/mm/yyyy";
         } else if (typeof cell.v === "string" && cell.v.trim()) {
-          const iso = parsePortugueseDate(cell.v);
+          const rawStr = cell.v.trim();
+          const iso = parsePortugueseDate(rawStr, true);
           const serial = dateToExcelSerial(iso);
           if (serial) {
             cell.t = "n";
             cell.v = serial;
-            cell.z = "dd/mm/yyyy";
+            cell.z = rawStr.includes("-") ? "dd-mm-yyyy" : "dd/mm/yyyy";
           }
         }
       }
