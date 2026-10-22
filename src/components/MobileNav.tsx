@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { 
   Menu, LayoutDashboard, Users, ClipboardList, FileText, Receipt, 
-  FileBarChart, MessageSquare, Building2, LogOut, FileSearch2, FileSpreadsheet, Settings, Calculator, Scale 
+  FileBarChart, MessageSquare, Building2, LogOut, FileSearch2, FileSpreadsheet, Settings, Calculator, Scale, Landmark
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -20,6 +20,7 @@ const adminNavItems = [
   { to: "/saft", label: "SAF-T", icon: FileSearch2 },
   { to: "/efatura", label: "e-Fatura", icon: FileSpreadsheet },
   { to: "/reconciliacao", label: "Reconciliação", icon: Scale },
+  { to: "/importacao-bancaria", label: "Importação Bancária", icon: Landmark },
   { to: "/simuladores", label: "Simuladores", icon: Calculator },
 ];
 
