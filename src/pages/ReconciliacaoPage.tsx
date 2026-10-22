@@ -1226,7 +1226,15 @@ export default function ReconciliacaoPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => exportReconciliationToExcel(reconciliationResult)}
+                onClick={() => {
+                  try {
+                    exportReconciliationToExcel(reconciliationResult);
+                    toast.success("Relatório de reconciliação (.xlsx) descarregado com sucesso!");
+                  } catch (e: any) {
+                    console.error(e);
+                    toast.error("Erro ao gerar relatório: " + (e?.message || e));
+                  }
+                }}
                 className="gap-2 text-xs border-border hover:bg-muted"
               >
                 <Download className="w-3.5 h-3.5" /> Relatório Resumo (.xlsx)

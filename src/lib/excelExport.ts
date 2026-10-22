@@ -64,18 +64,7 @@ export function saveWorkbook(wb: any, rawFileName: string): void {
     link.download = cleanName;
 
     document.body.appendChild(link);
-
-    // Disparar o download através de MouseEvent
-    try {
-      const clickEvent = new MouseEvent("click", {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      });
-      link.dispatchEvent(clickEvent);
-    } catch {
-      link.click();
-    }
+    link.click();
 
     // IMPORTANTE: NÃO remover o link imediatamente no mesmo tick!
     // O Chromium / Chrome ignora o atributo download e guarda como UUID se o nó for removido
