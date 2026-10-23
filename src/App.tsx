@@ -26,6 +26,7 @@ const ReconciliacaoPage = lazy(() => import("@/pages/ReconciliacaoPage"));
 const ImportacaoBancariaPage = lazy(() => import("@/pages/ImportacaoBancariaPage"));
 const WhatsAppPage = lazy(() => import("@/pages/WhatsAppPage"));
 const SimuladoresPage = lazy(() => import("@/pages/SimuladoresPage"));
+const ProgramasPage = lazy(() => import("@/pages/ProgramasPage"));
 const PortalContaPage = lazy(() => import("@/pages/PortalContaPage"));
 const PortalDocumentosPage = lazy(() => import("@/pages/PortalDocumentosPage"));
 const PortalMensagensPage = lazy(() => import("@/pages/PortalMensagensPage"));
@@ -74,6 +75,7 @@ const ProtectedRoutes = () => {
         <Route path="/lancamentos" element={<LancamentosPage />} />
         <Route path="/documentos" element={<DocumentosPage />} />
         <Route path="/faturacao" element={<FaturacaoPage />} />
+        <Route path="/programas" element={<ProgramasPage />} />
         <Route path="/saft" element={<SafTPage />} />
         <Route path="/efatura" element={<EFaturaPage />} />
         <Route path="/reconciliacao" element={<ReconciliacaoPage />} />

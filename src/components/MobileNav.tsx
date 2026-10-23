@@ -3,7 +3,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { 
   Menu, LayoutDashboard, Users, ClipboardList, FileText, Receipt, 
-  FileBarChart, MessageSquare, Building2, LogOut, FileSearch2, FileSpreadsheet, Settings, Calculator, Scale, Landmark
+  FileBarChart, MessageSquare, Building2, LogOut, FileSearch2, FileSpreadsheet, Settings, Calculator, Scale, Landmark, AppWindow, ChevronDown
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,10 +13,12 @@ const adminNavItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/clientes", label: "Clientes", icon: Users },
   { to: "/relatorios", label: "Relatórios", icon: FileBarChart },
-  // { to: "/colaboradores", label: "Colaboradores", icon: Users },
   { to: "/tarefas", label: "Tarefas", icon: ClipboardList },
   { to: "/documentos", label: "Documentos", icon: FileText },
   { to: "/faturacao", label: "Faturação", icon: Receipt },
+];
+
+const programasItems = [
   { to: "/saft", label: "SAF-T", icon: FileSearch2 },
   { to: "/efatura", label: "e-Fatura", icon: FileSpreadsheet },
   { to: "/reconciliacao", label: "Reconciliação", icon: Scale },
@@ -35,8 +37,17 @@ export function MobileNav() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
-  
-  const navItems = user?.role === "cliente" ? clientNavItems : adminNavItems;
+
+  const isClient = user?.role === "cliente";
+  const navItems = isClient ? clientNavItems : adminNavItems;
+
+  const isProgramasActive =
+    location.pathname === "/programas" ||
+    programasItems.some(
+      (item) => location.pathname === item.to || location.pathname.startsWith(item.to + "/")
+    );
+
+  const [programasOpen, setProgramasOpen] = useState(isProgramasActive);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -81,6 +92,59 @@ export function MobileNav() {
               </NavLink>
             );
           })}
+
+          {/* Grupo Programas no Mobile */}
+          {!isClient && (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setProgramasOpen((prev) => !prev)}
+                className={cn(
+                  "w-full flex items-center justify-between px-4 py-3 rounded-xl text-base font-medium transition-all select-none",
+                  isProgramasActive
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                )}
+              >
+                <div className="flex items-center gap-4">
+                  <AppWindow className="w-5 h-5 flex-shrink-0" />
+                  <span className="font-semibold">Programas</span>
+                </div>
+                <ChevronDown
+                  className={cn(
+                    "w-4 h-4 transition-transform duration-200",
+                    programasOpen && "rotate-180"
+                  )}
+                />
+              </button>
+
+              {programasOpen && (
+                <div className="ml-4 pl-3 my-1 border-l border-border/60 space-y-1">
+                  {programasItems.map((subItem) => {
+                    const isSubActive =
+                      location.pathname === subItem.to ||
+                      location.pathname.startsWith(subItem.to + "/");
+                    return (
+                      <NavLink
+                        key={subItem.to}
+                        to={subItem.to}
+                        onClick={() => setOpen(false)}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all",
+                          isSubActive
+                            ? "bg-primary/10 text-primary font-semibold"
+                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                        )}
+                      >
+                        <subItem.icon className="w-4 h-4 flex-shrink-0" />
+                        <span>{subItem.label}</span>
+                      </NavLink>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </nav>
 
         {user?.role !== "cliente" && (

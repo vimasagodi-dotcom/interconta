@@ -20,6 +20,8 @@ import {
   Calculator,
   Scale,
   Landmark,
+  AppWindow,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -31,6 +33,9 @@ const adminNavItems = [
   { to: "/tarefas", label: "Tarefas", icon: ClipboardList },
   { to: "/documentos", label: "Documentos", icon: FileText },
   { to: "/faturacao", label: "Faturação", icon: Receipt },
+];
+
+const programasItems = [
   { to: "/saft", label: "SAF-T", icon: FileSearch2 },
   { to: "/efatura", label: "e-Fatura", icon: FileSpreadsheet },
   { to: "/reconciliacao", label: "Reconciliação", icon: Scale },
@@ -49,9 +54,18 @@ const AppSidebar = () => {
   const { user, logout, impersonatedClient } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
-  
+
   const isImpersonating = !!impersonatedClient && location.pathname.startsWith("/portal");
-  const navItems = (user?.role === "cliente" || isImpersonating) ? clientNavItems : adminNavItems;
+  const isClient = user?.role === "cliente" || isImpersonating;
+  const navItems = isClient ? clientNavItems : adminNavItems;
+
+  const isProgramasActive =
+    location.pathname === "/programas" ||
+    programasItems.some(
+      (item) => location.pathname === item.to || location.pathname.startsWith(item.to + "/")
+    );
+
+  const [programasOpen, setProgramasOpen] = useState(isProgramasActive);
 
   return (
     <motion.aside
@@ -104,6 +118,83 @@ const AppSidebar = () => {
             </NavLink>
           );
         })}
+
+        {/* Grupo PROGRAMAS para utilizadores Admin/Colaborador */}
+        {!isClient && (
+          <div className="pt-1">
+            {collapsed ? (
+              <NavLink
+                to="/programas"
+                title="Programas (SAF-T, e-Fatura, Reconciliação, Banco, Simuladores)"
+                className={cn(
+                  "flex items-center justify-center p-2.5 rounded-lg text-sm font-medium transition-all",
+                  isProgramasActive
+                    ? "bg-sidebar-accent text-sidebar-primary"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                )}
+              >
+                <AppWindow className="w-5 h-5 flex-shrink-0" />
+              </NavLink>
+            ) : (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setProgramasOpen((prev) => !prev)}
+                  className={cn(
+                    "w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all select-none",
+                    isProgramasActive
+                      ? "bg-sidebar-accent/60 text-sidebar-primary"
+                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <AppWindow className="w-5 h-5 flex-shrink-0" />
+                    <span className="whitespace-nowrap font-semibold">Programas</span>
+                  </div>
+                  <ChevronDown
+                    className={cn(
+                      "w-4 h-4 text-sidebar-foreground/60 transition-transform duration-200",
+                      programasOpen && "rotate-180 text-sidebar-primary"
+                    )}
+                  />
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {programasOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="overflow-hidden ml-3 pl-3 my-1 border-l border-sidebar-border/50 space-y-1"
+                    >
+                      {programasItems.map((subItem) => {
+                        const isSubActive =
+                          location.pathname === subItem.to ||
+                          location.pathname.startsWith(subItem.to + "/");
+                        return (
+                          <NavLink
+                            key={subItem.to}
+                            to={subItem.to}
+                            className={cn(
+                              "flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all",
+                              isSubActive
+                                ? "bg-sidebar-accent text-sidebar-primary font-semibold"
+                                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/40 hover:text-sidebar-foreground"
+                            )}
+                          >
+                            <subItem.icon className="w-4 h-4 flex-shrink-0" />
+                            <span className="whitespace-nowrap">{subItem.label}</span>
+                          </NavLink>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+        )}
 
         {user?.role !== "cliente" && !isImpersonating && (
           <div className="mt-6 pt-4 border-t border-sidebar-border/30">
