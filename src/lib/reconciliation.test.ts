@@ -696,5 +696,53 @@ describe("reconciliation module", () => {
       expect(extracted[3].amount).toBe(-2.5);
       expect(extracted[3].amountCents).toBe(-250);
     });
+
+    it("should match invoices across shifted dates within same month/near for same supplier by value (Passo 2.6)", () => {
+      // Cenário Coteq / Drive360:
+      // No e-Fatura temos a fatura FT 2026A1/12185 com data 2026-08-11 e valor 125.00 €
+      // Na contabilidade temos o lançamento interno 26102309 com data 2026-08-15 e valor 125.00 €
+      const excelInvs: InvoiceItem[] = [
+        {
+          id: "e_coteq_1",
+          supplierRaw: "Coteq, S.A.",
+          supplierNormalized: "COTEQ",
+          nif: "506056465",
+          documentNumber: "FT 2026A1/12185",
+          date: "2026-08-11",
+          amount: 125.0,
+          amountCents: 12500,
+          source: "excel",
+          excelRowIndex: 0,
+        },
+      ];
+
+      const pdfInvs: InvoiceItem[] = [
+        {
+          id: "p_coteq_1",
+          supplierRaw: "Coteq, S.A.",
+          supplierNormalized: "COTEQ",
+          nif: "506056465",
+          documentNumber: "26102309",
+          date: "2026-08-15",
+          amount: 125.0,
+          amountCents: 12500,
+          source: "pdf",
+        },
+      ];
+
+      const result = reconcileSupplier(
+        "506056465",
+        "Coteq, S.A.",
+        excelInvs,
+        pdfInvs,
+        "506056465"
+      );
+
+      expect(result.status).toBe("reconciliado");
+      expect(excelInvs[0].isReconciled).toBe(true);
+      expect(pdfInvs[0].isReconciled).toBe(true);
+      expect(result.orphanExcelInvoices.length).toBe(0);
+      expect(result.orphanPdfInvoices.length).toBe(0);
+    });
   });
 });

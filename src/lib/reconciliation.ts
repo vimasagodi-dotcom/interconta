@@ -466,6 +466,45 @@ export function reconcileSupplier(
     }
   }
 
+  // PASSO 2.6: Reconciliação Multi-Data / Mesmo Mês por Valor (Mesmo Fornecedor / NIF)
+  // Quando o fornecedor/NIF é o mesmo e o mês é o mesmo (ou intervalo temporal até 35 dias),
+  // se o valor for idêntico (ou com diferença de arredondamento de IVA até 5 cêntimos),
+  // reconcilia mesmo que o número do documento na contabilidade seja o número interno de lançamento.
+  for (const eInv of excelInvoices) {
+    if (eInv.isReconciled) continue;
+
+    const maxTol = Math.max(centsTolerance, 5); // até 5 cêntimos para arredondamentos de IVA
+
+    const candidates = pdfInvoices.filter((pInv) => {
+      if (pInv.isReconciled || usedPdfIds.has(pInv.id)) return false;
+      if (!isSameMonthOrNear(eInv.date, pInv.date, 35)) return false;
+
+      const diffDirect = Math.abs(eInv.amountCents - pInv.amountCents);
+      const diffAbs = Math.abs(Math.abs(eInv.amountCents) - Math.abs(pInv.amountCents));
+      const diffBase =
+        eInv.baseAmountCents !== undefined
+          ? Math.abs(eInv.baseAmountCents - pInv.amountCents)
+          : Infinity;
+
+      return diffDirect <= maxTol || diffAbs <= maxTol || diffBase <= maxTol;
+    });
+
+    if (candidates.length > 0) {
+      // Se houver mais do que um candidato, selecionar o que tiver a data mais próxima
+      candidates.sort((a, b) => {
+        const timeE = new Date(eInv.date).getTime();
+        const diffA = Math.abs(new Date(a.date).getTime() - timeE);
+        const diffB = Math.abs(new Date(b.date).getTime() - timeE);
+        return diffA - diffB;
+      });
+
+      const bestMatch = candidates[0];
+      eInv.isReconciled = true;
+      bestMatch.isReconciled = true;
+      usedPdfIds.add(bestMatch.id);
+    }
+  }
+
   // Marcar explicitamente as restantes faturas como não reconciliadas
   excelInvoices.forEach((inv) => {
     if (inv.isReconciled === undefined) inv.isReconciled = false;
