@@ -41,6 +41,60 @@ describe("bankImport helpers", () => {
     expect(lines[0]).toMatchObject({ conta: 1211, debito: 5, credito: 0, description: "A" });
     expect(lines[1]).toMatchObject({ conta: 2111180, debito: 0, credito: 5 });
   });
+
+  it("reads 6-column layout exactly as in user attachment (Data, Descrição, Débito, Crédito, Conta Débito, Conta Crédito)", () => {
+    const rows = [
+      ["08-04-2026", "MANUTENCAO DE CONTA VALOR NEGOCIOS MAR 2026", "-7,99 €", "-   €", 698812, 1211],
+      ["08-04-2026", "IMPOSTO DE SELO MAR 2026", "-0,32 €", "-   €", 681231701, 1211],
+      ["08-05-2026", "MANUTENCAO DE CONTA VALOR NEGOCIOS ABR 2026", "-7,99 €", "-   €", 698812, 1211],
+      ["08-05-2026", "IMPOSTO DE SELO ABR 2026", "-0,32 €", "-   €", 681231701, 1211],
+      ["09-06-2026", "MANUTENCAO DE CONTA VALOR NEGOCIOS MAI 2026", "-7,99 €", "-   €", 698812, 1211],
+      ["09-06-2026", "IMPOSTO DE SELO MAI 2026", "-0,32 €", "-   €", 681231701, 1211],
+    ];
+
+    const { movements, issues } = parseBankRows(rows);
+    expect(issues).toHaveLength(0);
+    expect(movements).toHaveLength(6);
+
+    expect(movements[0]).toMatchObject({
+      day: 8,
+      month: 4,
+      year: 2026,
+      description: "MANUTENCAO DE CONTA VALOR NEGOCIOS MAR 2026",
+      amount: 7.99,
+      contaDebito: 698812,
+      contaCredito: 1211,
+    });
+
+    expect(movements[1]).toMatchObject({
+      day: 8,
+      month: 4,
+      year: 2026,
+      description: "IMPOSTO DE SELO MAR 2026",
+      amount: 0.32,
+      contaDebito: 681231701,
+      contaCredito: 1211,
+    });
+
+    const lines = buildImportLines(movements, { diario: 9, descritivo: 18 });
+    expect(lines).toHaveLength(12);
+
+    // Mês 4: 904001, 904002
+    expect(lines[0]).toMatchObject({ numero: 904001, conta: 698812, debito: 7.99, credito: 0 });
+    expect(lines[1]).toMatchObject({ numero: 904001, conta: 1211, debito: 0, credito: 7.99 });
+    expect(lines[2]).toMatchObject({ numero: 904002, conta: 681231701, debito: 0.32, credito: 0 });
+    expect(lines[3]).toMatchObject({ numero: 904002, conta: 1211, debito: 0, credito: 0.32 });
+
+    // Mês 5: 905001, 905002
+    expect(lines[4]).toMatchObject({ numero: 905001, conta: 698812, debito: 7.99, credito: 0 });
+    expect(lines[5]).toMatchObject({ numero: 905001, conta: 1211, debito: 0, credito: 7.99 });
+
+    // Total de débito e crédito balanceados
+    const totalDeb = lines.reduce((s, l) => s + l.debito, 0);
+    const totalCred = lines.reduce((s, l) => s + l.credito, 0);
+    expect(Math.abs(totalDeb - totalCred)).toBeLessThan(0.001);
+    expect(totalDeb).toBeCloseTo(24.93, 2);
+  });
 });
 
 describe.skipIf(!hasFiles)("bankImport vs ficheiro real Microdigital", () => {

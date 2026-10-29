@@ -4,12 +4,14 @@ import * as XLSX from "xlsx";
  * Importação de movimentos bancários para a contabilidade Microdigital.
  *
  * Entrada (Excel de origem, 1 linha por movimento, sem cabeçalho obrigatório):
- *   A: Data | B: Descrição | C: Valor a Débito | D: Valor a Crédito | E: Saldo (ignorado)
- *   F: Conta a Débito | G: Conta a Crédito
+ *   Formato 6 colunas (conforme anexo):
+ *     A: Data | B: Descritivo | C: Débito | D: Crédito | E: Conta a Débito | F: Conta a Crédito
+ *   Formato 7 colunas (com saldo):
+ *     A: Data | B: Descrição | C: Débito | D: Crédito | E: Saldo (ignorado) | F: Conta a Débito | G: Conta a Crédito
  *
- * Saída: ficheiro .xls no formato exato aceite pelo Microdigital (folha "dia332019010269"
- * + folha oculta "Activex" com os metadados de formato), com cada movimento desdobrado
- * em 2 linhas balanceadas (débito / crédito) e numeração Diário+Mês+Sequência (ex: 901001).
+ * Saída: ficheiro .xls no formato exato aceite pelo Microdigital (folha "dia332019010269"),
+ * com cada movimento desdobrado em 2 linhas balanceadas (débito / crédito) e numeração
+ * Diário+Mês+Sequência (ex: 901001, 901002 … 902001).
  */
 
 export interface BankImportConfig {
@@ -73,14 +75,14 @@ export const MICRODIGITAL_HEADERS = [
 
 const pad = (n: number, len: number) => String(n).padStart(len, "0");
 
-/** Converte valores como 30152.22, "30 152,22 €", "-  €" ou "1.234,56" em número. */
+/** Converte valores como 30152.22, "30 152,22 €", "-  €", "-7,99 €" ou "1.234,56" em número. */
 export function parseBankAmount(v: unknown): number {
   if (v === null || v === undefined) return 0;
   if (typeof v === "number") return isFinite(v) ? v : 0;
   let s = String(v)
     .replace(/[€\s\u00a0\u202f]/g, "")
     .trim();
-  if (!s || s === "-") return 0;
+  if (!s || s === "-" || s === "–" || s === "—" || /^[-–—]+$/.test(s)) return 0;
   if (s.includes(",")) {
     s = s.replace(/\./g, "").replace(",", ".");
   }
@@ -88,11 +90,15 @@ export function parseBankAmount(v: unknown): number {
   return isNaN(n) ? 0 : n;
 }
 
-/** Converte datas (texto dd/mm/aaaa, ISO, Date ou nº de série Excel) em {year, month, day}. */
+/** Converte datas (texto dd/mm/aaaa, dd-mm-aaaa, ISO, Date ou nº de série Excel) em {year, month, day}. */
 export function parseBankDate(v: unknown): { year: number; month: number; day: number } | null {
   if (v === null || v === undefined || v === "") return null;
 
   if (v instanceof Date && !isNaN(v.getTime())) {
+    const h = v.getUTCHours();
+    if (h === 0 && v.getUTCMinutes() === 0) {
+      return { year: v.getUTCFullYear(), month: v.getUTCMonth() + 1, day: v.getUTCDate() };
+    }
     return { year: v.getFullYear(), month: v.getMonth() + 1, day: v.getDate() };
   }
 
@@ -110,7 +116,7 @@ export function parseBankDate(v: unknown): { year: number; month: number; day: n
     if (year < 100) year += 2000;
     return validDate(year, parseInt(m[2], 10), parseInt(m[1], 10));
   }
-  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  m = s.match(/^(\d{4})[/\-.](\d{1,2})[/\-.](\d{1,2})/);
   if (m) {
     return validDate(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
   }
@@ -126,10 +132,96 @@ function validDate(year: number, month: number, day: number) {
 export function parseAccount(v: unknown): string | number | null {
   if (v === null || v === undefined) return null;
   const s = String(v).trim();
-  if (!s) return null;
+  if (!s || s === "-" || s === "–" || s === "—") return null;
   if (/^\d+$/.test(s)) return Number(s);
   if (typeof v === "number") return v;
   return s;
+}
+
+export interface ColumnMapping {
+  dateCol: number;
+  descCol: number;
+  debitCol: number;
+  creditCol: number;
+  contaDebCol: number;
+  contaCredCol: number;
+}
+
+/**
+ * Deteta o layout de colunas do Excel:
+ * - 6 colunas (conforme anexo): A: Data | B: Descritivo | C: Débito | D: Crédito | E: Conta Débito | F: Conta Crédito
+ * - 7 colunas (com saldo): A: Data | B: Descrição | C: Débito | D: Crédito | E: Saldo | F: Conta Débito | G: Conta Crédito
+ * Ou através de cabeçalhos identificados na folha.
+ */
+export function detectColumnMapping(rows: unknown[][]): ColumnMapping {
+  // 1. Verificar se existe uma linha de cabeçalho explicativa nas primeiras linhas
+  for (let r = 0; r < Math.min(rows.length, 5); r++) {
+    const row = rows[r];
+    if (!row || !Array.isArray(row)) continue;
+    if (parseBankDate(row[0])) continue; // Linha de dados, não é cabeçalho
+
+    let dateCol = -1;
+    let descCol = -1;
+    let debitCol = -1;
+    let creditCol = -1;
+    let contaDebCol = -1;
+    let contaCredCol = -1;
+
+    row.forEach((cell, idx) => {
+      const s = String(cell ?? "").trim().toLowerCase();
+      if (!s) return;
+      if (/conta.*d[eé]b|c\.?\s*d[eé]b|cta.*d[eé]b/i.test(s)) {
+        contaDebCol = idx;
+      } else if (/conta.*cr[eé]d|c\.?\s*cr[eé]d|cta.*cr[eé]d/i.test(s)) {
+        contaCredCol = idx;
+      } else if (/d[eé]bito|sa[ií]da/i.test(s)) {
+        debitCol = idx;
+      } else if (/cr[eé]dito|entrada/i.test(s)) {
+        creditCol = idx;
+      } else if (/data|date/i.test(s)) {
+        if (dateCol === -1) dateCol = idx;
+      } else if (/descri|hist[oó]rico|movimento/i.test(s)) {
+        if (descCol === -1) descCol = idx;
+      }
+    });
+
+    if (contaDebCol !== -1 && contaCredCol !== -1) {
+      return {
+        dateCol: dateCol !== -1 ? dateCol : 0,
+        descCol: descCol !== -1 ? descCol : 1,
+        debitCol: debitCol !== -1 ? debitCol : 2,
+        creditCol: creditCol !== -1 ? creditCol : 3,
+        contaDebCol,
+        contaCredCol,
+      };
+    }
+  }
+
+  // 2. Sem cabeçalhos explícitos: inspecionar as linhas com dados
+  let votes6 = 0; // Col E (idx 4) = contaDeb, Col F (idx 5) = contaCred (como no anexo do utilizador)
+  let votes7 = 0; // Col F (idx 5) = contaDeb, Col G (idx 6) = contaCred (formato com saldo)
+
+  for (const row of rows) {
+    if (!row || !Array.isArray(row)) continue;
+    if (!parseBankDate(row[0])) continue;
+
+    const acc4 = parseAccount(row[4]);
+    const acc5 = parseAccount(row[5]);
+    const acc6 = parseAccount(row[6]);
+
+    if (acc6 !== null && acc5 !== null) {
+      votes7++;
+    } else if (acc5 !== null && acc4 !== null) {
+      votes6++;
+    }
+  }
+
+  // Por defeito, dá prioridade ao formato do anexo (6 colunas: E=Conta Débito, F=Conta Crédito)
+  if (votes7 > votes6) {
+    return { dateCol: 0, descCol: 1, debitCol: 2, creditCol: 3, contaDebCol: 5, contaCredCol: 6 };
+  }
+
+  return { dateCol: 0, descCol: 1, debitCol: 2, creditCol: 3, contaDebCol: 4, contaCredCol: 5 };
 }
 
 /**
@@ -142,24 +234,43 @@ export function parseBankRows(rows: unknown[][]): {
 } {
   const movements: BankMovement[] = [];
   const issues: BankParseIssue[] = [];
+  const mapping = detectColumnMapping(rows);
 
   rows.forEach((row, idx) => {
     if (!row || row.every((c) => c === null || c === undefined || String(c).trim() === "")) return;
     const sourceRow = idx + 1;
-    const date = parseBankDate(row[0]);
+    const date = parseBankDate(row[mapping.dateCol]);
     if (!date) {
       // Primeira linha com texto é tratada como cabeçalho, sem aviso
-      if (idx > 0) issues.push({ sourceRow, message: `Data inválida ("${row[0] ?? ""}") — linha ignorada.` });
+      if (idx > 0) issues.push({ sourceRow, message: `Data inválida ("${row[mapping.dateCol] ?? ""}") — linha ignorada.` });
       return;
     }
 
-    const description = String(row[1] ?? "").trim();
-    const debit = Math.abs(parseBankAmount(row[2]));
-    const credit = Math.abs(parseBankAmount(row[3]));
-    // Regra: o valor vai sempre para o débito da conta a débito; a coluna E (saldo) é ignorada
+    const description = String(row[mapping.descCol] ?? "").trim();
+    const debit = Math.abs(parseBankAmount(row[mapping.debitCol]));
+    const credit = mapping.creditCol >= 0 ? Math.abs(parseBankAmount(row[mapping.creditCol])) : 0;
+    // O valor do movimento é o montante movimentado (débito ou crédito)
     const amount = Math.round((debit > 0 ? debit : credit) * 100) / 100;
-    const contaDebito = parseAccount(row[5]);
-    const contaCredito = parseAccount(row[6]);
+
+    // Contas com base no mapeamento detetado, com fallback resiliente por linha
+    let contaDebito = parseAccount(row[mapping.contaDebCol]);
+    let contaCredito = parseAccount(row[mapping.contaCredCol]);
+
+    if ((contaDebito === null || contaCredito === null) && mapping.contaDebCol === 4) {
+      const cd5 = parseAccount(row[5]);
+      const cc6 = parseAccount(row[6]);
+      if (cd5 !== null && cc6 !== null) {
+        contaDebito = cd5;
+        contaCredito = cc6;
+      }
+    } else if ((contaDebito === null || contaCredito === null) && mapping.contaDebCol === 5) {
+      const cd4 = parseAccount(row[4]);
+      const cc5 = parseAccount(row[5]);
+      if (cd4 !== null && cc5 !== null) {
+        contaDebito = cd4;
+        contaCredito = cc5;
+      }
+    }
 
     if (amount <= 0) {
       issues.push({ sourceRow, message: "Movimento sem valor — linha ignorada." });

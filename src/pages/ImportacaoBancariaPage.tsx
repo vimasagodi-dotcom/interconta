@@ -137,7 +137,7 @@ export default function ImportacaoBancariaPage() {
               <div>
                 <h2 className="font-semibold text-base text-foreground">Movimentos bancários (Excel)</h2>
                 <p className="text-xs text-muted-foreground">
-                  Colunas: Data · Descrição · Débito · Crédito · Saldo (ignorado) · Conta Débito · Conta Crédito
+                  Colunas: Data · Descritivo · Débito · Crédito · Conta Débito · Conta Crédito (suporta 6 colunas ou 7 com Saldo)
                 </p>
               </div>
             </div>
