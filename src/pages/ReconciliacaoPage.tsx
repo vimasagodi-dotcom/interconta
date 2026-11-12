@@ -25,6 +25,7 @@ import {
   Calendar,
   Layers,
   Sparkles,
+  HelpCircle,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -353,13 +354,26 @@ export default function ReconciliacaoPage() {
       .filter((inv) => !inv.isReconciled).length;
   }, [reconciliationResult]);
 
+  const pendingVerificationExcelCount = useMemo(() => {
+    if (!reconciliationResult) return 0;
+    return reconciliationResult.suppliers
+      .flatMap((s) => s.allExcelInvoices)
+      .filter((inv) => inv.needsVerification).length;
+  }, [reconciliationResult]);
+
   // Lista de fornecedores filtrada nos resultados
   const filteredSuppliers = useMemo(() => {
     if (!reconciliationResult) return [];
 
     return reconciliationResult.suppliers.filter((s) => {
       // Filtro por Estado
-      if (statusFilter !== "todos" && s.status !== statusFilter) {
+      if (statusFilter === "a_verificar") {
+        const hasUnverifiedGroup = s.equalValueGroups?.some((g) => g.status === "a_verificar");
+        const hasNeedsVerif = s.allExcelInvoices.some((i) => i.needsVerification);
+        if (!s.hasEqualValues && !hasUnverifiedGroup && !hasNeedsVerif) {
+          return false;
+        }
+      } else if (statusFilter !== "todos" && s.status !== statusFilter) {
         return false;
       }
       // Filtro por Pesquisa (Nome ou NIF)
@@ -1079,7 +1093,7 @@ export default function ReconciliacaoPage() {
       {currentStep === 3 && reconciliationResult && (
         <div className="space-y-6 animate-fade-in">
           {/* CARTÕES DE RESUMO */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
             <StatCard
               title="Total Fornecedores"
               value={reconciliationResult.totalSuppliers}
@@ -1109,6 +1123,12 @@ export default function ReconciliacaoPage() {
               icon={<AlertCircle className="w-5 h-5 text-destructive" />}
             />
             <StatCard
+              title="Valores Iguais (Verificar)"
+              value={reconciliationResult.pendingVerificationCount || reconciliationResult.equalValueGroups?.filter((g) => g.status === "a_verificar").length || 0}
+              changeType="neutral"
+              icon={<HelpCircle className="w-5 h-5 text-amber-500" />}
+            />
+            <StatCard
               title="Diferença Total"
               value={`${reconciliationResult.totalDifference.toLocaleString("pt-PT", {
                 minimumFractionDigits: 2,
@@ -1119,7 +1139,7 @@ export default function ReconciliacaoPage() {
             />
           </div>
 
-          {/* BANNER DESTAQUE: EXPORTAÇÃO E-FATURA PINTADO A VERDE + FOLHA SÓ CONTABILIDADE */}
+          {/* BANNER DESTAQUE: EXPORTAÇÃO E-FATURA PINTADO A VERDE + VALORES IGUAIS + FOLHA SÓ CONTABILIDADE */}
           <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/25 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
             <div className="flex items-start sm:items-center gap-3.5">
               <div className="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0 shadow-inner">
@@ -1128,20 +1148,25 @@ export default function ReconciliacaoPage() {
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="font-bold text-sm sm:text-base text-foreground">
-                    Excel e-Fatura Reconciliado (com Folha de Faturas Só na Contabilidade)
+                    Excel e-Fatura Reconciliado (com Folhas de Valores Iguais & Só Contabilidade)
                   </h3>
                   <Badge className="bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border-emerald-600/30 font-semibold text-xs">
-                    {reconciledExcelCount} de {totalExcelCount} reconciliadas (
+                    {reconciledExcelCount} reconciliadas a verde (
                     {totalExcelCount > 0 ? Math.round((reconciledExcelCount / totalExcelCount) * 100) : 0}%)
                   </Badge>
-                  {unreconciledPdfCount > 0 && (
+                  {pendingVerificationExcelCount > 0 && (
                     <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 font-semibold text-xs">
+                      {pendingVerificationExcelCount} a amarelo (valores iguais a confirmar)
+                    </Badge>
+                  )}
+                  {unreconciledPdfCount > 0 && (
+                    <Badge className="bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/30 font-semibold text-xs">
                       {unreconciledPdfCount} faturas ausentes no e-Fatura
                     </Badge>
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1 max-w-2xl leading-relaxed">
-                  Gera o Excel em 2 folhas: <strong>Folha 1 (e-Fatura)</strong> com todas as colunas originais e linhas reconciliadas pintadas a verde; e <strong>Folha 2 (Não no e-Fatura)</strong> com as faturas lançadas na contabilidade que não constam no e-Fatura para validação se pertencem à empresa.
+                  Gera o Excel completo com 3 folhas: <strong>Folha 1 (e-Fatura)</strong> com linhas certas a verde e valores iguais a amarelo; <strong>Folha 2 (Valores Iguais)</strong> com a lista comparativa detalhada para confirmação; e <strong>Folha 3 (Não no e-Fatura)</strong> com as faturas exclusivas da contabilidade.
                 </p>
               </div>
             </div>
@@ -1154,6 +1179,56 @@ export default function ReconciliacaoPage() {
               {isExportingPainted ? "A Gerar Excel..." : "Descarregar Excel Reconciliado (.xlsx)"}
             </Button>
           </div>
+
+          {/* PAINEL DE VALORES IGUAIS / A CONFIRMAR (QUANDO EXISTEM) */}
+          {reconciliationResult.equalValueGroups && reconciliationResult.equalValueGroups.some((g) => g.status === "a_verificar") && (
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  <h3 className="font-bold text-sm text-foreground">
+                    Faturas com Valores Iguais / A Confirmar ({reconciliationResult.equalValueGroups.filter((g) => g.status === "a_verificar").length} grupos detetados)
+                  </h3>
+                </div>
+                <Badge variant="outline" className="text-xs bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 font-semibold">
+                  Atenção Necessária
+                </Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Existem fornecedores com múltiplas faturas de valor idêntico (na mesma data ou período) onde a quantidade no e-Fatura difere do MDI ou requer confirmação do documento:
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-amber-500/10 text-amber-900 dark:text-amber-200 font-semibold border-b border-amber-500/20">
+                    <tr>
+                      <th className="py-2.5 px-3">Fornecedor</th>
+                      <th className="py-2.5 px-2">NIF</th>
+                      <th className="py-2.5 px-2">Data / Período</th>
+                      <th className="py-2.5 px-2 text-right">Valor (€)</th>
+                      <th className="py-2.5 px-2 text-center">Qtd. e-Fat / Contab</th>
+                      <th className="py-2.5 px-3">Situação / Ação a Realizar</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-500/15">
+                    {reconciliationResult.equalValueGroups.filter((g) => g.status === "a_verificar").map((g, idx) => (
+                      <tr key={idx} className="hover:bg-amber-500/5">
+                        <td className="py-2.5 px-3 font-semibold text-foreground">{g.supplierName}</td>
+                        <td className="py-2.5 px-2 text-muted-foreground font-mono">{g.nif || "—"}</td>
+                        <td className="py-2.5 px-2 text-muted-foreground">{g.date}</td>
+                        <td className="py-2.5 px-2 text-right font-bold text-amber-700 dark:text-amber-400">
+                          {g.amount.toFixed(2)} €
+                        </td>
+                        <td className="py-2.5 px-2 text-center font-medium">
+                          <span className="text-foreground">{g.excelCount}</span> no e-Fat / <span className="text-foreground">{g.pdfCount}</span> na Contab
+                        </td>
+                        <td className="py-2.5 px-3 text-muted-foreground leading-snug">{g.note}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* BARRA DE AÇÕES E FILTROS */}
           <div className="elevated-card rounded-2xl p-4 border border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1169,7 +1244,7 @@ export default function ReconciliacaoPage() {
                 />
               </div>
 
-              <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg text-xs font-medium">
+              <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg text-xs font-medium flex-wrap">
                 <button
                   onClick={() => setStatusFilter("todos")}
                   className={`px-3 py-1 rounded-md transition-all ${
@@ -1209,6 +1284,16 @@ export default function ReconciliacaoPage() {
                   }`}
                 >
                   Reconciliados ({reconciliationResult.reconciledCount})
+                </button>
+                <button
+                  onClick={() => setStatusFilter("a_verificar")}
+                  className={`px-3 py-1 rounded-md transition-all ${
+                    statusFilter === "a_verificar"
+                      ? "bg-card text-amber-600 dark:text-amber-400 shadow-sm font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  A Confirmar / Valores Iguais ({reconciliationResult.equalValueGroups?.filter((g) => g.status === "a_verificar").length || 0})
                 </button>
               </div>
             </div>
@@ -1512,7 +1597,14 @@ export default function ReconciliacaoPage() {
                                     key={inv.id}
                                     className="flex items-center justify-between py-1 border-b border-border/30 last:border-0"
                                   >
-                                    <span className="text-foreground">{inv.documentNumber}</span>
+                                    <span className="text-foreground flex items-center gap-1.5 flex-wrap">
+                                      <span>{inv.documentNumber}</span>
+                                      {inv.needsVerification && (
+                                        <Badge variant="outline" className="text-[9px] bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30 px-1 py-0 font-medium">
+                                          Valor Igual — Verificar
+                                        </Badge>
+                                      )}
+                                    </span>
                                     <span className="font-mono font-medium">
                                       {inv.amount.toFixed(2)} €
                                     </span>

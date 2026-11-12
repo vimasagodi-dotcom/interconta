@@ -119,15 +119,20 @@ export async function exportOriginalExcelHighlighted(
   const ws = wb.Sheets[sheetName];
   const range = XLSX.utils.decode_range(ws["!ref"] || "A1:A1");
 
-  // Identificar todas as linhas originais do Excel que foram reconciliadas
+  // Identificar todas as linhas originais do Excel que foram reconciliadas ou requerem verificação (valores iguais)
   const reconciledRowIndices = new Set<number>();
+  const verificationRowIndices = new Set<number>();
   let totalExcelInvoices = 0;
 
   for (const s of summary.suppliers) {
     for (const inv of s.allExcelInvoices) {
       totalExcelInvoices++;
-      if (inv.isReconciled && typeof inv.excelRowIndex === "number") {
-        reconciledRowIndices.add(inv.excelRowIndex);
+      if (typeof inv.excelRowIndex === "number") {
+        if (inv.needsVerification) {
+          verificationRowIndices.add(inv.excelRowIndex);
+        } else if (inv.isReconciled) {
+          reconciledRowIndices.add(inv.excelRowIndex);
+        }
       }
     }
   }
@@ -140,6 +145,18 @@ export async function exportOriginalExcelHighlighted(
     },
     font: {
       color: { rgb: "006100" }, // Texto verde escuro de alto contraste
+    },
+  };
+
+  // Estilo amarelo suave oficial do Excel para itens a confirmar / valores iguais
+  const yellowStyle = {
+    fill: {
+      patternType: "solid",
+      fgColor: { rgb: "FFF2CC" }, // Fundo amarelo suave (Excel warning/verify)
+    },
+    font: {
+      color: { rgb: "7F6000" }, // Texto dourado/castanho de alto contraste
+      bold: true,
     },
   };
 
@@ -213,10 +230,18 @@ export async function exportOriginalExcelHighlighted(
     }
   }
 
-  // Pintar linhas reconciliadas a verde
+  // Pintar linhas reconciliadas a verde e linhas com valores iguais a confirmar a amarelo
   for (let idx = 0; idx < totalRowsInSheet; idx++) {
-    if (reconciledRowIndices.has(idx)) {
-      const sheetRow = firstDataRow + idx;
+    const sheetRow = firstDataRow + idx;
+    if (verificationRowIndices.has(idx)) {
+      for (let c = range.s.c; c <= range.e.c; c++) {
+        const addr = XLSX.utils.encode_cell({ r: sheetRow, c });
+        if (!ws[addr]) {
+          ws[addr] = { t: "s", v: "" };
+        }
+        ws[addr].s = yellowStyle;
+      }
+    } else if (reconciledRowIndices.has(idx)) {
       for (let c = range.s.c; c <= range.e.c; c++) {
         const addr = XLSX.utils.encode_cell({ r: sheetRow, c });
         if (!ws[addr]) {
@@ -398,8 +423,106 @@ export async function exportOriginalExcelHighlighted(
     wsUnrec[totalAmountAddr].z = '#,##0.00\\ "€";[Red]-#,##0.00\\ "€"';
   }
 
-  // Adicionar Folha 2 ao livro Excel
+  // Adicionar Folha de Faturas Não Reconciliadas ao livro Excel
   XLSX.utils.book_append_sheet(wb, wsUnrec, "Não no e-Fatura (Contab)");
+
+  // =========================================================================
+  // FOLHA 3: Faturas com Valores Iguais / A Confirmar (Mesma Data ou Fornecedor)
+  // =========================================================================
+  const equalGroups = summary.equalValueGroups || [];
+  if (equalGroups.length > 0) {
+    const sheetEqualHeaders = [
+      "Fornecedor",
+      "NIF",
+      "Data / Período",
+      "Valor (€)",
+      "Qtd. e-Fatura",
+      "Qtd. Contabilidade",
+      "Documentos no e-Fatura",
+      "Documentos na Contabilidade",
+      "Estado",
+      "Situação / Ação Recomendada",
+    ];
+
+    const sheetEqualData: any[][] = [sheetEqualHeaders];
+
+    for (const g of equalGroups) {
+      const efDocsStr = g.excelInvoices.map((i) => `${i.documentNumber} (${i.date})`).join("; ") || "—";
+      const mdiDocsStr = g.pdfInvoices.map((i) => `${i.documentNumber || i.internalDocNumber || "DOC"} (${i.date})`).join("; ") || "—";
+      const estadoStr =
+        g.status === "confirmado"
+          ? "Confirmado (1-a-1)"
+          : g.status === "a_verificar"
+          ? "A Verificar"
+          : g.status === "so_excel"
+          ? "Só no e-Fatura"
+          : "Só na Contabilidade";
+
+      sheetEqualData.push([
+        g.supplierName,
+        g.nif || "N/A",
+        g.date,
+        g.amount,
+        g.excelCount,
+        g.pdfCount,
+        efDocsStr,
+        mdiDocsStr,
+        estadoStr,
+        g.note,
+      ]);
+    }
+
+    const wsEqual = XLSX.utils.aoa_to_sheet(sheetEqualData);
+    wsEqual["!cols"] = [
+      { wch: 32 }, // Fornecedor
+      { wch: 14 }, // NIF
+      { wch: 22 }, // Data
+      { wch: 14 }, // Valor
+      { wch: 14 }, // Qtd e-Fatura
+      { wch: 14 }, // Qtd Contab
+      { wch: 38 }, // Doc e-Fatura
+      { wch: 38 }, // Doc Contab
+      { wch: 20 }, // Estado
+      { wch: 50 }, // Situação
+    ];
+
+    // Estilos do cabeçalho de wsEqual
+    for (let c = 0; c < sheetEqualHeaders.length; c++) {
+      const addr = XLSX.utils.encode_cell({ r: 0, c });
+      if (wsEqual[addr]) wsEqual[addr].s = unrecHeaderStyle;
+    }
+
+    const yellowBadge = {
+      fill: { patternType: "solid", fgColor: { rgb: "FEF3C7" } }, // Amarelo suave
+      font: { color: { rgb: "92400E" }, bold: true },
+      alignment: { horizontal: "center" },
+    };
+
+    const greenBadge = {
+      fill: { patternType: "solid", fgColor: { rgb: "D1FAE5" } }, // Verde suave
+      font: { color: { rgb: "065F46" }, bold: true },
+      alignment: { horizontal: "center" },
+    };
+
+    for (let idx = 0; idx < equalGroups.length; idx++) {
+      const r = idx + 1;
+      const g = equalGroups[idx];
+      // Formatar valor (coluna 3)
+      const amtAddr = XLSX.utils.encode_cell({ r, c: 3 });
+      if (wsEqual[amtAddr]) {
+        wsEqual[amtAddr].t = "n";
+        wsEqual[amtAddr].z = '#,##0.00\\ "€";[Red]-#,##0.00\\ "€"';
+      }
+
+      // Estilo do estado (coluna 8)
+      const statusAddr = XLSX.utils.encode_cell({ r, c: 8 });
+      if (wsEqual[statusAddr]) {
+        wsEqual[statusAddr].s = g.status === "confirmado" ? greenBadge : yellowBadge;
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, wsEqual, "Valores Iguais (A Confirmar)");
+  }
 
   // Gerar e descarregar ficheiro
   const baseName = originalFile.name.replace(/\.[^/.]+$/, "");

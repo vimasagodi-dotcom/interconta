@@ -305,10 +305,10 @@ export async function parseExcelPreview(file: File | any): Promise<ExcelParsedPr
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
 
-  // Obter dados em formato JSON (array de objetos onde as chaves são os cabeçalhos)
+  // Obter dados em formato JSON preservando tipos originais (números e números de série de datas do Excel)
   const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet, {
     defval: "",
-    raw: false,
+    raw: true,
   });
 
   if (!rows.length) {

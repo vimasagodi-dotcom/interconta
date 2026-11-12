@@ -25,12 +25,30 @@ export interface InvoiceItem {
   pageNumber?: number;
   excelRowIndex?: number; // Índice da linha original no ficheiro Excel
   isReconciled?: boolean; // Se esta fatura específica foi reconciliada
+  needsVerification?: boolean; // Se esta fatura tem valores iguais ou requer confirmação
+  verificationReason?: string; // Motivo da verificação (ex: valor igual na mesma data)
+  matchedDocNumber?: string; // Nº do documento correspondido na contabilidade/Excel
 }
 
 export type SupplierReconciliationStatus =
   | "reconciliado"
   | "parcialmente_reconciliado"
   | "nao_reconciliado";
+
+export interface EqualValueGroup {
+  supplierName: string;
+  nif?: string;
+  amount: number;
+  amountCents: number;
+  date: string;
+  isSameDate: boolean;
+  excelCount: number;
+  pdfCount: number;
+  excelInvoices: InvoiceItem[];
+  pdfInvoices: InvoiceItem[];
+  status: "confirmado" | "a_verificar" | "so_excel" | "so_contab";
+  note: string;
+}
 
 export interface DayDiscrepancy {
   date: string; // YYYY-MM-DD
@@ -65,6 +83,8 @@ export interface SupplierReconciliationResult {
   orphanPdfInvoices: InvoiceItem[]; // Faturas em dias sem qualquer movimento no Excel
   allExcelInvoices: InvoiceItem[];
   allPdfInvoices: InvoiceItem[];
+  hasEqualValues?: boolean;
+  equalValueGroups?: EqualValueGroup[];
 }
 
 export interface GlobalReconciliationSummary {
@@ -72,10 +92,12 @@ export interface GlobalReconciliationSummary {
   reconciledCount: number;
   partiallyReconciledCount: number;
   notReconciledCount: number;
+  pendingVerificationCount?: number;
   totalExcelAmount: number;
   totalPdfAmount: number;
   totalDifference: number;
   suppliers: SupplierReconciliationResult[];
+  equalValueGroups?: EqualValueGroup[];
 }
 
 /**
@@ -281,6 +303,87 @@ export function isSameMonthOrNear(dateA: string, dateB: string, maxDaysDiff: num
 }
 
 /**
+ * Deteta faturas com valores iguais (mesma data ou mesmo fornecedor) e classifica se estão
+ * confirmadas com correspondência exata 1-para-1 ou se requerem verificação pelo utilizador.
+ */
+export function detectEqualValueGroups(
+  supplierDisplayName: string,
+  nif: string | undefined,
+  excelInvoices: InvoiceItem[],
+  pdfInvoices: InvoiceItem[]
+): EqualValueGroup[] {
+  const groups: EqualValueGroup[] = [];
+  const amounts = new Set([
+    ...excelInvoices.map((i) => i.amountCents),
+    ...pdfInvoices.map((i) => i.amountCents),
+  ]);
+
+  for (const amtCents of amounts) {
+    if (amtCents === 0) continue;
+    const efInvs = excelInvoices.filter((i) => i.amountCents === amtCents);
+    const mdiInvs = pdfInvoices.filter((i) => i.amountCents === amtCents);
+
+    // Se houver mais do que uma fatura com este valor no Excel ou no MDI
+    if (efInvs.length > 1 || mdiInvs.length > 1) {
+      const amtEuros = fromCents(amtCents);
+      const allDates = Array.from(new Set([...efInvs.map((i) => i.date), ...mdiInvs.map((i) => i.date)])).sort();
+      const isSameDate = allDates.length === 1;
+
+      let status: "confirmado" | "a_verificar" | "so_excel" | "so_contab" = "confirmado";
+      let note = "";
+
+      if (efInvs.length > 0 && mdiInvs.length === 0) {
+        status = "so_excel";
+        note = `${efInvs.length} fatura(s) de ${amtEuros.toFixed(2)} € no e-Fatura sem lançamento no MDI.`;
+        efInvs.forEach((inv) => {
+          inv.needsVerification = true;
+          inv.verificationReason = `Valor repetido (${amtEuros.toFixed(2)} €) — sem lançamento no MDI`;
+        });
+      } else if (mdiInvs.length > 0 && efInvs.length === 0) {
+        status = "so_contab";
+        note = `${mdiInvs.length} fatura(s) de ${amtEuros.toFixed(2)} € no MDI sem registo no e-Fatura.`;
+        mdiInvs.forEach((inv) => {
+          inv.needsVerification = true;
+          inv.verificationReason = `Valor repetido (${amtEuros.toFixed(2)} €) — sem registo no e-Fatura`;
+        });
+      } else if (efInvs.length === mdiInvs.length && efInvs.every((e) => e.isReconciled) && mdiInvs.every((p) => p.isReconciled)) {
+        status = "confirmado";
+        note = `${efInvs.length} fatura(s) de ${amtEuros.toFixed(2)} € com correspondência 1-para-1 confirmada.`;
+      } else {
+        status = "a_verificar";
+        note = isSameDate
+          ? `Valores iguais na mesma data (${allDates[0]}): ${efInvs.length} no e-Fatura vs ${mdiInvs.length} no MDI. Confirmar documentos.`
+          : `Valores repetidos (${amtEuros.toFixed(2)} €): ${efInvs.length} no e-Fatura vs ${mdiInvs.length} no MDI. Confirmar documentos e pendências.`;
+
+        efInvs.forEach((inv) => {
+          inv.needsVerification = true;
+          inv.verificationReason = isSameDate
+            ? `Valor igual na mesma data (${inv.date}) — confirmar documento`
+            : `Valor repetido (${amtEuros.toFixed(2)} €) — confirmar documento e lançamentos`;
+        });
+      }
+
+      groups.push({
+        supplierName: supplierDisplayName,
+        nif,
+        amount: amtEuros,
+        amountCents: amtCents,
+        date: isSameDate ? allDates[0] : (allDates.length > 0 ? `${allDates[0]} a ${allDates[allDates.length - 1]}` : "Várias datas"),
+        isSameDate,
+        excelCount: efInvs.length,
+        pdfCount: mdiInvs.length,
+        excelInvoices: efInvs,
+        pdfInvoices: mdiInvs,
+        status,
+        note,
+      });
+    }
+  }
+
+  return groups;
+}
+
+/**
  * LÓGICA PRINCIPAL DE RECONCILIAÇÃO POR FORNECEDOR
  * 
  * Segue os passos definidos:
@@ -321,6 +424,7 @@ export function reconcileSupplier(
   if (Math.abs(diffCents) <= centsTolerance && excelInvoices.length > 0 && pdfInvoices.length > 0) {
     excelInvoices.forEach((inv) => { inv.isReconciled = true; });
     pdfInvoices.forEach((inv) => { inv.isReconciled = true; });
+    const equalValueGroups = detectEqualValueGroups(supplierDisplayName, nif, excelInvoices, pdfInvoices);
     return {
       supplierKey,
       supplierName: supplierDisplayName,
@@ -341,6 +445,8 @@ export function reconcileSupplier(
       orphanPdfInvoices: [],
       allExcelInvoices: excelInvoices,
       allPdfInvoices: pdfInvoices,
+      hasEqualValues: equalValueGroups.length > 0,
+      equalValueGroups,
     };
   }
 
@@ -535,6 +641,8 @@ export function reconcileSupplier(
     finalStatus = "parcialmente_reconciliado";
   }
 
+  const equalValueGroups = detectEqualValueGroups(supplierDisplayName, nif, excelInvoices, pdfInvoices);
+
   return {
     supplierKey,
     supplierName: supplierDisplayName,
@@ -555,6 +663,8 @@ export function reconcileSupplier(
     orphanPdfInvoices,
     allExcelInvoices: excelInvoices,
     allPdfInvoices: pdfInvoices,
+    hasEqualValues: equalValueGroups.length > 0,
+    equalValueGroups,
   };
 }
 
@@ -668,14 +778,26 @@ export function reconcileAll(
     return a.supplierName.localeCompare(b.supplierName);
   });
 
+  // Agregar todos os grupos de valores iguais
+  const allEqualValueGroups: EqualValueGroup[] = suppliersResults.flatMap(
+    (s) => s.equalValueGroups || []
+  );
+
+  const pendingVerificationCount = suppliersResults.reduce(
+    (acc, s) => acc + s.allExcelInvoices.filter((i) => i.needsVerification).length,
+    0
+  );
+
   return {
     totalSuppliers: suppliersResults.length,
     reconciledCount,
     partiallyReconciledCount,
     notReconciledCount,
+    pendingVerificationCount,
     totalExcelAmount: fromCents(totalExcelCentsAll),
     totalPdfAmount: fromCents(totalPdfCentsAll),
     totalDifference: fromCents(totalExcelCentsAll - totalPdfCentsAll),
     suppliers: suppliersResults,
+    equalValueGroups: allEqualValueGroups,
   };
 }
