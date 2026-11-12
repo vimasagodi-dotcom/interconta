@@ -1123,7 +1123,7 @@ export default function ReconciliacaoPage() {
               icon={<AlertCircle className="w-5 h-5 text-destructive" />}
             />
             <StatCard
-              title="Valores Iguais (Verificar)"
+              title="Valores Repetidos (A Confirmar)"
               value={reconciliationResult.pendingVerificationCount || reconciliationResult.equalValueGroups?.filter((g) => g.status === "a_verificar").length || 0}
               changeType="neutral"
               icon={<HelpCircle className="w-5 h-5 text-amber-500" />}
@@ -1293,7 +1293,7 @@ export default function ReconciliacaoPage() {
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
-                  A Confirmar / Valores Iguais ({reconciliationResult.equalValueGroups?.filter((g) => g.status === "a_verificar").length || 0})
+                  A Confirmar / Repetidos ({reconciliationResult.equalValueGroups?.filter((g) => g.status === "a_verificar").length || 0})
                 </button>
               </div>
             </div>

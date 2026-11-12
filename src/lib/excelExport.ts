@@ -366,86 +366,26 @@ export async function exportOriginalExcelHighlighted(
     { wch: 14 }, // Página
   ];
 
-  // Estilos da Folha 2
-  const unrecHeaderStyle = {
-    fill: { patternType: "solid", fgColor: { rgb: "1E293B" } }, // Navy escuro
-    font: { color: { rgb: "FFFFFF" }, bold: true },
-    alignment: { vertical: "center" },
-  };
-
-  const warningBadgeStyle = {
-    fill: { patternType: "solid", fgColor: { rgb: "FEE2E2" } }, // Rose/vermelho suave
-    font: { color: { rgb: "991B1B" }, bold: true },
-    alignment: { horizontal: "center" },
-  };
-
-  const totalRowStyle = {
-    fill: { patternType: "solid", fgColor: { rgb: "F1F5F9" } },
-    font: { bold: true },
-  };
-
-  // Aplicar estilos ao cabeçalho da Folha 2
-  for (let c = 0; c < sheet2Headers.length; c++) {
-    const addr = XLSX.utils.encode_cell({ r: 0, c });
-    if (wsUnrec[addr]) wsUnrec[addr].s = unrecHeaderStyle;
-  }
-
-  // Aplicar estilos e formatação às linhas de dados da Folha 2
-  for (let r = 1; r <= unreconciledPdfInvoices.length; r++) {
-    // Data Contabilidade (coluna 4)
-    const dateAddr = XLSX.utils.encode_cell({ r, c: 4 });
-    if (wsUnrec[dateAddr]) {
-      wsUnrec[dateAddr].z = "dd/mm/yyyy";
-      wsUnrec[dateAddr].s = { alignment: { horizontal: "center" } };
-    }
-
-    // Valor Lançado (€) (coluna 5)
-    const amountAddr = XLSX.utils.encode_cell({ r, c: 5 });
-    if (wsUnrec[amountAddr]) {
-      wsUnrec[amountAddr].z = '#,##0.00\\ "€";[Red]-#,##0.00\\ "€"';
-    }
-
-    // Estado (coluna 6)
-    const statusAddr = XLSX.utils.encode_cell({ r, c: 6 });
-    if (wsUnrec[statusAddr]) {
-      wsUnrec[statusAddr].s = warningBadgeStyle;
-    }
-  }
-
-  // Aplicar estilos à linha de total
-  const totalRowIdx = unreconciledPdfInvoices.length + 2;
-  for (let c = 0; c < sheet2Headers.length; c++) {
-    const addr = XLSX.utils.encode_cell({ r: totalRowIdx, c });
-    if (wsUnrec[addr]) wsUnrec[addr].s = totalRowStyle;
-  }
-  const totalAmountAddr = XLSX.utils.encode_cell({ r: totalRowIdx, c: 5 });
-  if (wsUnrec[totalAmountAddr]) {
-    wsUnrec[totalAmountAddr].z = '#,##0.00\\ "€";[Red]-#,##0.00\\ "€"';
-  }
-
-  // Adicionar Folha de Faturas Não Reconciliadas ao livro Excel
-  XLSX.utils.book_append_sheet(wb, wsUnrec, "Não no e-Fatura (Contab)");
-
   // =========================================================================
-  // FOLHA 3: Faturas com Valores Iguais / A Confirmar (Mesma Data ou Fornecedor)
+  // FOLHA 2: Faturas com Valores Iguais / A Confirmar (Suspeitas de Duplicado)
   // =========================================================================
   const equalGroups = summary.equalValueGroups || [];
+  const sheetEqualHeaders = [
+    "Fornecedor",
+    "NIF",
+    "Data / Período",
+    "Valor (€)",
+    "Qtd. e-Fatura",
+    "Qtd. Contabilidade",
+    "Documentos no e-Fatura",
+    "Documentos na Contabilidade",
+    "Estado",
+    "Situação / Ação Recomendada",
+  ];
+
+  const sheetEqualData: any[][] = [sheetEqualHeaders];
+
   if (equalGroups.length > 0) {
-    const sheetEqualHeaders = [
-      "Fornecedor",
-      "NIF",
-      "Data / Período",
-      "Valor (€)",
-      "Qtd. e-Fatura",
-      "Qtd. Contabilidade",
-      "Documentos no e-Fatura",
-      "Documentos na Contabilidade",
-      "Estado",
-      "Situação / Ação Recomendada",
-    ];
-
-    const sheetEqualData: any[][] = [sheetEqualHeaders];
-
     for (const g of equalGroups) {
       const efDocsStr = g.excelInvoices.map((i) => `${i.documentNumber} (${i.date})`).join("; ") || "—";
       const mdiDocsStr = g.pdfInvoices.map((i) => `${i.documentNumber || i.internalDocNumber || "DOC"} (${i.date})`).join("; ") || "—";
@@ -471,58 +411,130 @@ export async function exportOriginalExcelHighlighted(
         g.note,
       ]);
     }
-
-    const wsEqual = XLSX.utils.aoa_to_sheet(sheetEqualData);
-    wsEqual["!cols"] = [
-      { wch: 32 }, // Fornecedor
-      { wch: 14 }, // NIF
-      { wch: 22 }, // Data
-      { wch: 14 }, // Valor
-      { wch: 14 }, // Qtd e-Fatura
-      { wch: 14 }, // Qtd Contab
-      { wch: 38 }, // Doc e-Fatura
-      { wch: 38 }, // Doc Contab
-      { wch: 20 }, // Estado
-      { wch: 50 }, // Situação
-    ];
-
-    // Estilos do cabeçalho de wsEqual
-    for (let c = 0; c < sheetEqualHeaders.length; c++) {
-      const addr = XLSX.utils.encode_cell({ r: 0, c });
-      if (wsEqual[addr]) wsEqual[addr].s = unrecHeaderStyle;
-    }
-
-    const yellowBadge = {
-      fill: { patternType: "solid", fgColor: { rgb: "FEF3C7" } }, // Amarelo suave
-      font: { color: { rgb: "92400E" }, bold: true },
-      alignment: { horizontal: "center" },
-    };
-
-    const greenBadge = {
-      fill: { patternType: "solid", fgColor: { rgb: "D1FAE5" } }, // Verde suave
-      font: { color: { rgb: "065F46" }, bold: true },
-      alignment: { horizontal: "center" },
-    };
-
-    for (let idx = 0; idx < equalGroups.length; idx++) {
-      const r = idx + 1;
-      const g = equalGroups[idx];
-      // Formatar valor (coluna 3)
-      const amtAddr = XLSX.utils.encode_cell({ r, c: 3 });
-      if (wsEqual[amtAddr]) {
-        wsEqual[amtAddr].t = "n";
-        wsEqual[amtAddr].z = '#,##0.00\\ "€";[Red]-#,##0.00\\ "€"';
-      }
-
-      // Estilo do estado (coluna 8)
-      const statusAddr = XLSX.utils.encode_cell({ r, c: 8 });
-      if (wsEqual[statusAddr]) {
-        wsEqual[statusAddr].s = g.status === "confirmado" ? greenBadge : yellowBadge;
-      }
-    }
-
-    XLSX.utils.book_append_sheet(wb, wsEqual, "Valores Iguais (A Confirmar)");
+  } else {
+    sheetEqualData.push([
+      "Sem valores repetidos a verificar",
+      "—",
+      "—",
+      0,
+      0,
+      0,
+      "—",
+      "—",
+      "Conforme",
+      "Nenhuma fatura com suspeita de duplicado detetada (todos os valores iguais possuem datas ou números distintos confirmados).",
+    ]);
   }
+
+  const wsEqual = XLSX.utils.aoa_to_sheet(sheetEqualData);
+  wsEqual["!cols"] = [
+    { wch: 34 }, // Fornecedor
+    { wch: 14 }, // NIF
+    { wch: 22 }, // Data
+    { wch: 14 }, // Valor
+    { wch: 14 }, // Qtd e-Fatura
+    { wch: 14 }, // Qtd Contab
+    { wch: 38 }, // Doc e-Fatura
+    { wch: 38 }, // Doc Contab
+    { wch: 20 }, // Estado
+    { wch: 60 }, // Situação
+  ];
+
+  const unrecHeaderStyle = {
+    fill: { patternType: "solid", fgColor: { rgb: "1E293B" } }, // Navy escuro
+    font: { color: { rgb: "FFFFFF" }, bold: true },
+    alignment: { vertical: "center" },
+  };
+
+  // Estilos do cabeçalho de wsEqual
+  for (let c = 0; c < sheetEqualHeaders.length; c++) {
+    const addr = XLSX.utils.encode_cell({ r: 0, c });
+    if (wsEqual[addr]) wsEqual[addr].s = unrecHeaderStyle;
+  }
+
+  const yellowBadge = {
+    fill: { patternType: "solid", fgColor: { rgb: "FEF3C7" } }, // Amarelo suave
+    font: { color: { rgb: "92400E" }, bold: true },
+    alignment: { horizontal: "center" },
+  };
+
+  const greenBadge = {
+    fill: { patternType: "solid", fgColor: { rgb: "D1FAE5" } }, // Verde suave
+    font: { color: { rgb: "065F46" }, bold: true },
+    alignment: { horizontal: "center" },
+  };
+
+  for (let idx = 0; idx < (equalGroups.length > 0 ? equalGroups.length : 1); idx++) {
+    const r = idx + 1;
+    const g = equalGroups[idx];
+    const amtAddr = XLSX.utils.encode_cell({ r, c: 3 });
+    if (wsEqual[amtAddr]) {
+      wsEqual[amtAddr].t = "n";
+      wsEqual[amtAddr].z = '#,##0.00\\ "€";[Red]-#,##0.00\\ "€"';
+    }
+
+    const statusAddr = XLSX.utils.encode_cell({ r, c: 8 });
+    if (wsEqual[statusAddr]) {
+      wsEqual[statusAddr].s = g && g.status === "confirmado" ? greenBadge : (equalGroups.length === 0 ? greenBadge : yellowBadge);
+    }
+  }
+
+  // Adicionar Folha 2: Valores Iguais (A Confirmar)
+  XLSX.utils.book_append_sheet(wb, wsEqual, "Valores Iguais (A Confirmar)");
+
+  // =========================================================================
+  // FOLHA 3: Faturas Não Reconciliadas da Contabilidade (MDI / PDFs)
+  // =========================================================================
+  // Estilos da Folha 3
+  const warningBadgeStyle = {
+    fill: { patternType: "solid", fgColor: { rgb: "FEE2E2" } }, // Rose/vermelho suave
+    font: { color: { rgb: "991B1B" }, bold: true },
+    alignment: { horizontal: "center" },
+  };
+
+  const totalRowStyle = {
+    fill: { patternType: "solid", fgColor: { rgb: "F1F5F9" } },
+    font: { bold: true },
+  };
+
+  // Aplicar estilos ao cabeçalho da Folha 3
+  for (let c = 0; c < sheet2Headers.length; c++) {
+    const addr = XLSX.utils.encode_cell({ r: 0, c });
+    if (wsUnrec[addr]) wsUnrec[addr].s = unrecHeaderStyle;
+  }
+
+  // Aplicar estilos e formatação às linhas de dados da Folha 3
+  for (let r = 1; r <= unreconciledPdfInvoices.length; r++) {
+    const dateAddr = XLSX.utils.encode_cell({ r, c: 4 });
+    if (wsUnrec[dateAddr]) {
+      wsUnrec[dateAddr].z = "dd/mm/yyyy";
+      wsUnrec[dateAddr].s = { alignment: { horizontal: "center" } };
+    }
+
+    const amountAddr = XLSX.utils.encode_cell({ r, c: 5 });
+    if (wsUnrec[amountAddr]) {
+      wsUnrec[amountAddr].z = '#,##0.00\\ "€";[Red]-#,##0.00\\ "€"';
+    }
+
+    const statusAddr = XLSX.utils.encode_cell({ r, c: 6 });
+    if (wsUnrec[statusAddr]) {
+      wsUnrec[statusAddr].s = warningBadgeStyle;
+    }
+  }
+
+  // Aplicar estilos à linha de total
+  const totalRowIdx = unreconciledPdfInvoices.length + 2;
+  for (let c = 0; c < sheet2Headers.length; c++) {
+    const addr = XLSX.utils.encode_cell({ r: totalRowIdx, c });
+    if (wsUnrec[addr]) wsUnrec[addr].s = totalRowStyle;
+  }
+  const totalAmountAddr = XLSX.utils.encode_cell({ r: totalRowIdx, c: 5 });
+  if (wsUnrec[totalAmountAddr]) {
+    wsUnrec[totalAmountAddr].z = '#,##0.00\\ "€";[Red]-#,##0.00\\ "€"';
+  }
+
+  // Adicionar Folha 3: Não no e-Fatura (Contab)
+  XLSX.utils.book_append_sheet(wb, wsUnrec, "Não no e-Fatura (Contab)");
 
   // Gerar e descarregar ficheiro
   const baseName = originalFile.name.replace(/\.[^/.]+$/, "");

@@ -303,8 +303,111 @@ export function isSameMonthOrNear(dateA: string, dateB: string, maxDaysDiff: num
 }
 
 /**
- * Deteta faturas com valores iguais (mesma data ou mesmo fornecedor) e classifica se estão
- * confirmadas com correspondência exata 1-para-1 ou se requerem verificação pelo utilizador.
+ * Verifica se duas datas são o mesmo dia ou muito próximas (até maxDaysDiff dias, por defeito 1).
+ */
+export function isSameDateOrNear(dateA: string, dateB: string, maxDaysDiff: number = 1): boolean {
+  if (!dateA || !dateB) return false;
+  if (dateA === dateB) return true;
+  const [y1, m1, d1] = dateA.split("-").map((n) => parseInt(n, 10));
+  const [y2, m2, d2] = dateB.split("-").map((n) => parseInt(n, 10));
+  if (!y1 || !m1 || !d1 || !y2 || !m2 || !d2) return false;
+
+  const t1 = Date.UTC(y1, m1 - 1, d1);
+  const t2 = Date.UTC(y2, m2 - 1, d2);
+  const diffDays = Math.abs(t1 - t2) / 86400000;
+  return diffDays <= maxDaysDiff;
+}
+
+/**
+ * Calcula a distância de Levenshtein entre duas strings para deteção de gralhas.
+ */
+export function levenshteinDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+
+  const matrix: number[][] = [];
+  for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // substituição
+          matrix[i][j - 1] + 1,     // inserção
+          matrix[i - 1][j] + 1      // remoção
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
+/**
+ * Verifica se dois números de documento são parecidos ou idênticos,
+ * indicando possível documento repetido / duplicado (ex: lançados no mesmo dia com número parecido).
+ */
+export function areInvoiceNumbersSimilar(doc1?: string, doc2?: string): boolean {
+  if (!doc1 || !doc2) return false;
+  const d1 = doc1.trim().toUpperCase();
+  const d2 = doc2.trim().toUpperCase();
+  if (!d1 || !d2) return false;
+  if (d1 === d2) return true;
+
+  // Remover pontuação e espaços (ex: "FT 2026/123" -> "FT2026123")
+  const clean1 = d1.replace(/[^A-Z0-9]/g, "");
+  const clean2 = d2.replace(/[^A-Z0-9]/g, "");
+  if (clean1 === clean2) return true;
+
+  // Extrair dígitos numéricos (ex: "FT 2026/123" -> "2026123")
+  const digits1 = d1.replace(/\D/g, "");
+  const digits2 = d2.replace(/\D/g, "");
+
+  if (digits1 && digits2) {
+    if (digits1 === digits2) return true;
+
+    // Sufixo numérico idêntico (ex: "00123" e "123", ou "479433" e "9433")
+    if (digits1.endsWith(digits2) || digits2.endsWith(digits1)) {
+      const minLen = Math.min(digits1.length, digits2.length);
+      if (minLen >= 2) return true;
+    }
+
+    // Números consecutivos/adjacentes na mesma série (ex: 101 e 102, ou 5406 e 5407)
+    if (digits1.length === digits2.length && digits1.length >= 2) {
+      const n1 = parseInt(digits1, 10);
+      const n2 = parseInt(digits2, 10);
+      if (!isNaN(n1) && !isNaN(n2) && Math.abs(n1 - n2) <= 1) {
+        return true;
+      }
+    }
+  }
+
+  // Sufixos de retificação ou versão (ex: "FT 100" vs "FT 100/1", "FT 100-A", "FT 100 BIS")
+  if (clean1.startsWith(clean2) || clean2.startsWith(clean1)) {
+    const diffLen = Math.abs(clean1.length - clean2.length);
+    if (diffLen <= 3) return true;
+  }
+
+  // Distância de Levenshtein para pequenas gralhas ou trocas de dígitos (ex: "FT 1234" vs "FT 1243")
+  const maxLen = Math.max(clean1.length, clean2.length);
+  if (maxLen >= 4) {
+    const dist = levenshteinDistance(clean1, clean2);
+    if (dist <= 2 || (1 - dist / maxLen) >= 0.75) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Deteta faturas com valores iguais que possam estar REPETIDAS / DUPLICADAS
+ * (ex.: lançadas no mesmo dia com número parecido ou idêntico, ou repetições de documento).
+ * Faturas de valores iguais em datas distintas com correspondência 1-para-1 confirmada
+ * NÃO são incluídas nem pintadas de amarelo (mantêm-se reconciliadas a verde).
  */
 export function detectEqualValueGroups(
   supplierDisplayName: string,
@@ -323,61 +426,135 @@ export function detectEqualValueGroups(
     const efInvs = excelInvoices.filter((i) => i.amountCents === amtCents);
     const mdiInvs = pdfInvoices.filter((i) => i.amountCents === amtCents);
 
-    // Se houver mais do que uma fatura com este valor no Excel ou no MDI
-    if (efInvs.length > 1 || mdiInvs.length > 1) {
-      const amtEuros = fromCents(amtCents);
-      const allDates = Array.from(new Set([...efInvs.map((i) => i.date), ...mdiInvs.map((i) => i.date)])).sort();
-      const isSameDate = allDates.length === 1;
+    // Se só existe 1 documento no total (ou 1 no EF e 1 no MDI), não há duplicados
+    if (efInvs.length + mdiInvs.length <= 1) continue;
+    if (efInvs.length === 1 && mdiInvs.length === 1) continue;
 
-      let status: "confirmado" | "a_verificar" | "so_excel" | "so_contab" = "confirmado";
-      let note = "";
+    let isSuspectedDuplicate = false;
+    let duplicateReason = "";
+    const suspiciousEfInvs = new Set<InvoiceItem>();
+    const suspiciousMdiInvs = new Set<InvoiceItem>();
 
-      if (efInvs.length > 0 && mdiInvs.length === 0) {
-        status = "so_excel";
-        note = `${efInvs.length} fatura(s) de ${amtEuros.toFixed(2)} € no e-Fatura sem lançamento no MDI.`;
-        efInvs.forEach((inv) => {
-          inv.needsVerification = true;
-          inv.verificationReason = `Valor repetido (${amtEuros.toFixed(2)} €) — sem lançamento no MDI`;
-        });
-      } else if (mdiInvs.length > 0 && efInvs.length === 0) {
-        status = "so_contab";
-        note = `${mdiInvs.length} fatura(s) de ${amtEuros.toFixed(2)} € no MDI sem registo no e-Fatura.`;
-        mdiInvs.forEach((inv) => {
-          inv.needsVerification = true;
-          inv.verificationReason = `Valor repetido (${amtEuros.toFixed(2)} €) — sem registo no e-Fatura`;
-        });
-      } else if (efInvs.length === mdiInvs.length && efInvs.every((e) => e.isReconciled) && mdiInvs.every((p) => p.isReconciled)) {
-        status = "confirmado";
-        note = `${efInvs.length} fatura(s) de ${amtEuros.toFixed(2)} € com correspondência 1-para-1 confirmada.`;
-      } else {
-        status = "a_verificar";
-        note = isSameDate
-          ? `Valores iguais na mesma data (${allDates[0]}): ${efInvs.length} no e-Fatura vs ${mdiInvs.length} no MDI. Confirmar documentos.`
-          : `Valores repetidos (${amtEuros.toFixed(2)} €): ${efInvs.length} no e-Fatura vs ${mdiInvs.length} no MDI. Confirmar documentos e pendências.`;
+    // 1. Verificar duplicados internos no e-Fatura (mesmo dia com número parecido/igual)
+    for (let i = 0; i < efInvs.length; i++) {
+      for (let j = i + 1; j < efInvs.length; j++) {
+        const invA = efInvs[i];
+        const invB = efInvs[j];
+        const isSameDay = isSameDateOrNear(invA.date, invB.date, 1);
+        const isSimilarNum = areInvoiceNumbersSimilar(invA.documentNumber, invB.documentNumber);
 
-        efInvs.forEach((inv) => {
-          inv.needsVerification = true;
-          inv.verificationReason = isSameDate
-            ? `Valor igual na mesma data (${inv.date}) — confirmar documento`
-            : `Valor repetido (${amtEuros.toFixed(2)} €) — confirmar documento e lançamentos`;
-        });
+        if (isSameDay && isSimilarNum) {
+          isSuspectedDuplicate = true;
+          suspiciousEfInvs.add(invA);
+          suspiciousEfInvs.add(invB);
+          duplicateReason = `Possível duplicado no e-Fatura: mesmo valor (${fromCents(amtCents).toFixed(2)} €) na mesma data (${invA.date}) com números parecidos ('${invA.documentNumber}' e '${invB.documentNumber}').`;
+        } else if (invA.documentNumber && invA.documentNumber === invB.documentNumber) {
+          isSuspectedDuplicate = true;
+          suspiciousEfInvs.add(invA);
+          suspiciousEfInvs.add(invB);
+          duplicateReason = `Fatura repetida no e-Fatura: documento '${invA.documentNumber}' registado mais do que uma vez (${fromCents(amtCents).toFixed(2)} €).`;
+        }
       }
-
-      groups.push({
-        supplierName: supplierDisplayName,
-        nif,
-        amount: amtEuros,
-        amountCents: amtCents,
-        date: isSameDate ? allDates[0] : (allDates.length > 0 ? `${allDates[0]} a ${allDates[allDates.length - 1]}` : "Várias datas"),
-        isSameDate,
-        excelCount: efInvs.length,
-        pdfCount: mdiInvs.length,
-        excelInvoices: efInvs,
-        pdfInvoices: mdiInvs,
-        status,
-        note,
-      });
     }
+
+    // 2. Verificar duplicados internos no MDI / Contabilidade
+    for (let i = 0; i < mdiInvs.length; i++) {
+      for (let j = i + 1; j < mdiInvs.length; j++) {
+        const invA = mdiInvs[i];
+        const invB = mdiInvs[j];
+        const isSameDay = isSameDateOrNear(invA.date, invB.date, 1);
+        const isSimilarNum = areInvoiceNumbersSimilar(invA.documentNumber, invB.documentNumber);
+
+        if (isSameDay && isSimilarNum) {
+          isSuspectedDuplicate = true;
+          suspiciousMdiInvs.add(invA);
+          suspiciousMdiInvs.add(invB);
+          duplicateReason = `Possível duplicado no MDI: mesmo valor (${fromCents(amtCents).toFixed(2)} €) na mesma data (${invA.date}) com números parecidos ('${invA.documentNumber}' e '${invB.documentNumber}').`;
+        } else if (invA.documentNumber && invA.documentNumber === invB.documentNumber) {
+          isSuspectedDuplicate = true;
+          suspiciousMdiInvs.add(invA);
+          suspiciousMdiInvs.add(invB);
+          duplicateReason = `Lançamento repetido na contabilidade: documento '${invA.documentNumber}' lançado mais do que uma vez (${fromCents(amtCents).toFixed(2)} €).`;
+        }
+      }
+    }
+
+    // 3. Verificar divergência / ambiguidade no MESMO DIA entre e-Fatura e MDI
+    const datesMap = new Map<string, { ef: InvoiceItem[]; mdi: InvoiceItem[] }>();
+    for (const inv of efInvs) {
+      if (!datesMap.has(inv.date)) datesMap.set(inv.date, { ef: [], mdi: [] });
+      datesMap.get(inv.date)!.ef.push(inv);
+    }
+    for (const inv of mdiInvs) {
+      if (!datesMap.has(inv.date)) datesMap.set(inv.date, { ef: [], mdi: [] });
+      datesMap.get(inv.date)!.mdi.push(inv);
+    }
+
+    for (const [dt, entry] of datesMap.entries()) {
+      if (entry.ef.length > 0 && entry.mdi.length > 0) {
+        if (entry.ef.length !== entry.mdi.length) {
+          // Quantidades desiguais no mesmo dia para o mesmo valor
+          isSuspectedDuplicate = true;
+          entry.ef.forEach((i) => suspiciousEfInvs.add(i));
+          entry.mdi.forEach((i) => suspiciousMdiInvs.add(i));
+          duplicateReason = `Divergência na mesma data (${dt}): ${entry.ef.length} no e-Fatura vs ${entry.mdi.length} na contabilidade (${fromCents(amtCents).toFixed(2)} €). Confirmar se há fatura duplicada.`;
+        } else if (entry.ef.length > 1) {
+          // Múltiplas faturas no mesmo dia em ambos os lados
+          const anySimilar = entry.ef.some((e) =>
+            entry.mdi.some((m) => areInvoiceNumbersSimilar(e.documentNumber, m.documentNumber))
+          );
+          if (anySimilar || !entry.ef.every((e) => e.isReconciled)) {
+            isSuspectedDuplicate = true;
+            entry.ef.forEach((i) => suspiciousEfInvs.add(i));
+            entry.mdi.forEach((i) => suspiciousMdiInvs.add(i));
+            duplicateReason = `Múltiplas faturas de valor igual (${fromCents(amtCents).toFixed(2)} €) na mesma data (${dt}). Confirmar documentos.`;
+          }
+        }
+      }
+    }
+
+    // Se NÃO for suspeita de duplicado (ex: faturas mensais legítimas em datas distintas), NÃO incluir na Folha 2
+    if (!isSuspectedDuplicate) {
+      continue;
+    }
+
+    // Marcar as faturas suspeitas para verificação e alerta na interface / Excel
+    suspiciousEfInvs.forEach((inv) => {
+      inv.needsVerification = true;
+      inv.verificationReason = duplicateReason;
+    });
+    suspiciousMdiInvs.forEach((inv) => {
+      inv.needsVerification = true;
+      inv.verificationReason = duplicateReason;
+    });
+
+    const amtEuros = fromCents(amtCents);
+    const affectedDates = Array.from(
+      new Set([
+        ...Array.from(suspiciousEfInvs).map((i) => i.date),
+        ...Array.from(suspiciousMdiInvs).map((i) => i.date),
+      ])
+    ).sort();
+
+    groups.push({
+      supplierName: supplierDisplayName,
+      nif,
+      amount: amtEuros,
+      amountCents: amtCents,
+      date:
+        affectedDates.length === 1
+          ? affectedDates[0]
+          : affectedDates.length > 0
+          ? `${affectedDates[0]} a ${affectedDates[affectedDates.length - 1]}`
+          : "Várias datas",
+      isSameDate: affectedDates.length === 1,
+      excelCount: suspiciousEfInvs.size,
+      pdfCount: suspiciousMdiInvs.size,
+      excelInvoices: Array.from(suspiciousEfInvs),
+      pdfInvoices: Array.from(suspiciousMdiInvs),
+      status: "a_verificar",
+      note: duplicateReason,
+    });
   }
 
   return groups;
