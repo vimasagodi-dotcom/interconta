@@ -119,20 +119,15 @@ export async function exportOriginalExcelHighlighted(
   const ws = wb.Sheets[sheetName];
   const range = XLSX.utils.decode_range(ws["!ref"] || "A1:A1");
 
-  // Identificar todas as linhas originais do Excel que foram reconciliadas ou requerem verificação (valores iguais)
+  // Identificar todas as linhas originais do Excel que foram reconciliadas
   const reconciledRowIndices = new Set<number>();
-  const verificationRowIndices = new Set<number>();
   let totalExcelInvoices = 0;
 
   for (const s of summary.suppliers) {
     for (const inv of s.allExcelInvoices) {
       totalExcelInvoices++;
-      if (typeof inv.excelRowIndex === "number") {
-        if (inv.needsVerification) {
-          verificationRowIndices.add(inv.excelRowIndex);
-        } else if (inv.isReconciled) {
-          reconciledRowIndices.add(inv.excelRowIndex);
-        }
+      if (typeof inv.excelRowIndex === "number" && inv.isReconciled) {
+        reconciledRowIndices.add(inv.excelRowIndex);
       }
     }
   }
@@ -230,18 +225,10 @@ export async function exportOriginalExcelHighlighted(
     }
   }
 
-  // Pintar linhas reconciliadas a verde e linhas com valores iguais a confirmar a amarelo
+  // Pintar linhas reconciliadas a verde. As faturas não reconciliadas ficam sempre por pintar.
   for (let idx = 0; idx < totalRowsInSheet; idx++) {
     const sheetRow = firstDataRow + idx;
-    if (verificationRowIndices.has(idx)) {
-      for (let c = range.s.c; c <= range.e.c; c++) {
-        const addr = XLSX.utils.encode_cell({ r: sheetRow, c });
-        if (!ws[addr]) {
-          ws[addr] = { t: "s", v: "" };
-        }
-        ws[addr].s = yellowStyle;
-      }
-    } else if (reconciledRowIndices.has(idx)) {
+    if (reconciledRowIndices.has(idx)) {
       for (let c = range.s.c; c <= range.e.c; c++) {
         const addr = XLSX.utils.encode_cell({ r: sheetRow, c });
         if (!ws[addr]) {

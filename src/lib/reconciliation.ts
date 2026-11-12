@@ -457,7 +457,7 @@ export function detectEqualValueGroups(
       }
     }
 
-    // 2. Verificar duplicados internos no MDI / Contabilidade
+    // 2. Verificar duplicados internos no MDI / Contabilidade (faturas no mesmo dia com número parecido ou idêntico)
     for (let i = 0; i < mdiInvs.length; i++) {
       for (let j = i + 1; j < mdiInvs.length; j++) {
         const invA = mdiInvs[i];
@@ -469,14 +469,19 @@ export function detectEqualValueGroups(
           isSuspectedDuplicate = true;
           suspiciousMdiInvs.add(invA);
           suspiciousMdiInvs.add(invB);
-          duplicateReason = `Possível duplicado no MDI: mesmo valor (${fromCents(amtCents).toFixed(2)} €) na mesma data (${invA.date}) com números parecidos ('${invA.documentNumber}' e '${invB.documentNumber}').`;
+          duplicateReason = `Possível lançamento duplicado por engano no MDI: faturas com valor igual (${fromCents(amtCents).toFixed(2)} €) lançadas no mesmo dia (${invA.date}) e com números parecidos ('${invA.documentNumber}' e '${invB.documentNumber}'). Confirmar se foi lançada duas vezes.`;
         } else if (invA.documentNumber && invA.documentNumber === invB.documentNumber) {
           isSuspectedDuplicate = true;
           suspiciousMdiInvs.add(invA);
           suspiciousMdiInvs.add(invB);
-          duplicateReason = `Lançamento repetido na contabilidade: documento '${invA.documentNumber}' lançado mais do que uma vez (${fromCents(amtCents).toFixed(2)} €).`;
+          duplicateReason = `Fatura lançada duas vezes por engano no MDI: documento '${invA.documentNumber}' registado mais do que uma vez (${fromCents(amtCents).toFixed(2)} €). Confirmar se foi lançada duas vezes.`;
         }
       }
+    }
+
+    // Se foram detetados duplicados no MDI, associar as faturas correspondentes do e-Fatura para conferência lado a lado
+    if (suspiciousMdiInvs.size > 0 && suspiciousEfInvs.size === 0) {
+      efInvs.forEach((i) => suspiciousEfInvs.add(i));
     }
 
     // 3. Verificar divergência / ambiguidade no MESMO DIA entre e-Fatura e MDI
