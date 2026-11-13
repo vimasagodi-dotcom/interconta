@@ -95,8 +95,8 @@ describe("Deteção de Faturas com Valores Iguais / Suspeita de Duplicados", () 
     expect(efInvoices.every((i) => !i.needsVerification)).toBe(true);
   });
 
-  it("deve sinalizar faturas com o mesmo valor lançadas no mesmo dia com número parecido", () => {
-    // 2 faturas no mesmo dia para o mesmo fornecedor com números consecutivos
+  it("deve sinalizar faturas com o mesmo valor lançadas duas vezes no MDI quando no e-Fatura só existe uma", () => {
+    // 2 faturas lançadas no MDI no mesmo dia com números parecidos/idênticos, mas apenas 1 no e-Fatura
     const efInvoices: InvoiceItem[] = [
       {
         id: "1",
@@ -104,16 +104,6 @@ describe("Deteção de Faturas com Valores Iguais / Suspeita de Duplicados", () 
         supplierNormalized: "FORNECEDOR TESTE",
         nif: "501234567",
         documentNumber: "FT 2026/101",
-        date: "2026-08-10",
-        amount: 150.0,
-        amountCents: toCents(150.0),
-      },
-      {
-        id: "2",
-        supplierRaw: "Fornecedor Teste",
-        supplierNormalized: "FORNECEDOR TESTE",
-        nif: "501234567",
-        documentNumber: "FT 2026/102",
         date: "2026-08-10",
         amount: 150.0,
         amountCents: toCents(150.0),
@@ -131,13 +121,109 @@ describe("Deteção de Faturas com Valores Iguais / Suspeita de Duplicados", () 
         amount: 150.0,
         amountCents: toCents(150.0),
       },
+      {
+        id: "m2",
+        supplierRaw: "Fornecedor Teste",
+        supplierNormalized: "FORNECEDOR TESTE",
+        nif: "501234567",
+        documentNumber: "101", // Lançada duas vezes por engano na contabilidade
+        date: "2026-08-10",
+        amount: 150.0,
+        amountCents: toCents(150.0),
+      },
     ];
 
     const groups = detectEqualValueGroups("Fornecedor Teste", "501234567", efInvoices, mdiInvoices);
     expect(groups.length).toBe(1);
     expect(groups[0].status).toBe("a_verificar");
-    expect(efInvoices[0].needsVerification).toBe(true);
-    expect(efInvoices[1].needsVerification).toBe(true);
+    expect(mdiInvoices[0].needsVerification).toBe(true);
+    expect(mdiInvoices[1].needsVerification).toBe(true);
+  });
+
+  it("não deve sinalizar faturas como duplicadas se existirem no e-Fatura em número correspondente (caso Area, S.A.)", () => {
+    // 2 faturas no MDI e 2 faturas no e-Fatura na mesma data com o mesmo valor
+    const efInvoices: InvoiceItem[] = [
+      {
+        id: "ef1",
+        supplierRaw: "Area, S.A.",
+        supplierNormalized: "AREA",
+        nif: "502580097",
+        documentNumber: "FS 14C/100148162",
+        date: "2026-09-19",
+        amount: 204.4,
+        amountCents: toCents(204.4),
+      },
+      {
+        id: "ef2",
+        supplierRaw: "Area, S.A.",
+        supplierNormalized: "AREA",
+        nif: "502580097",
+        documentNumber: "FT 14A/100021464",
+        date: "2026-09-19",
+        amount: 204.4,
+        amountCents: toCents(204.4),
+      },
+    ];
+
+    const mdiInvoices: InvoiceItem[] = [
+      {
+        id: "m1",
+        supplierRaw: "Area, S.A.",
+        supplierNormalized: "AREA",
+        nif: "502580097",
+        documentNumber: "18162",
+        date: "2026-09-19",
+        amount: 204.4,
+        amountCents: toCents(204.4),
+      },
+      {
+        id: "m2",
+        supplierRaw: "Area, S.A.",
+        supplierNormalized: "AREA",
+        nif: "502580097",
+        documentNumber: "1464",
+        date: "2026-09-19",
+        amount: 204.4,
+        amountCents: toCents(204.4),
+      },
+    ];
+
+    const groups = detectEqualValueGroups("Area, S.A.", "502580097", efInvoices, mdiInvoices);
+    // Se ambas existem no e-Fatura, NÃO é duplicado!
+    expect(groups.length).toBe(0);
+    expect(mdiInvoices.every((i) => !i.needsVerification)).toBe(true);
+    expect(efInvoices.every((i) => !i.needsVerification)).toBe(true);
+  });
+
+  it("não deve sinalizar faturas como duplicadas na contabilidade se tiverem 0 lançamentos no MDI (caso Banco BPI)", () => {
+    // 2 faturas no e-Fatura e 0 no MDI
+    const efInvoices: InvoiceItem[] = [
+      {
+        id: "ef1",
+        supplierRaw: "Banco Bpi Sa",
+        supplierNormalized: "BANCO BPI",
+        nif: "501214534",
+        documentNumber: "FT 004/81553721",
+        date: "2026-07-07",
+        amount: 24.37,
+        amountCents: toCents(24.37),
+      },
+      {
+        id: "ef2",
+        supplierRaw: "Banco Bpi Sa",
+        supplierNormalized: "BANCO BPI",
+        nif: "501214534",
+        documentNumber: "FT 004/81553720",
+        date: "2026-07-07",
+        amount: 24.37,
+        amountCents: toCents(24.37),
+      },
+    ];
+
+    const mdiInvoices: InvoiceItem[] = [];
+
+    const groups = detectEqualValueGroups("Banco Bpi Sa", "501214534", efInvoices, mdiInvoices);
+    expect(groups.length).toBe(0);
   });
 });
 

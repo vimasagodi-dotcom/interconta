@@ -409,6 +409,23 @@ export function areInvoiceNumbersSimilar(doc1?: string, doc2?: string): boolean 
  * Faturas de valores iguais em datas distintas com correspondência 1-para-1 confirmada
  * NÃO são incluídas nem pintadas de amarelo (mantêm-se reconciliadas a verde).
  */
+/**
+ * Deteção Inteligente de Faturas Suspeitas de Duplicação na Contabilidade (MDI)
+ * 
+ * Regras estritas acordadas com o utilizador:
+ * 1. Apenas são analisados valores com múltiplos lançamentos no MDI (pdfInvoices),
+ *    pois o objetivo é detetar se o utilizador/contabilista lançou a mesma fatura 2x por engano.
+ * 2. Lançamentos no MDI com o mesmo valor no mesmo dia (ou +/- 1 dia) e com número de documento
+ *    parecido ou idêntico são analisados.
+ * 3. REGRA FUNDAMENTAL: "se estiver no e-fatura é pq não é duplicado":
+ *    - Se no e-Fatura existirem tantas (ou mais) faturas legítimas nessa data/valor
+ *      como no MDI (ex: 2 no MDI e 2 no e-Fatura, como na Area, S.A.), então NÃO É DUPLICADO!
+ *      Ambas são faturas reais emitidas pelo fornecedor e registadas na AT.
+ *    - Só é duplicado se no e-Fatura existirem MENOS faturas do que no MDI (ex: 2 no MDI
+ *      mas apenas 1 no e-Fatura, ou 0 no e-Fatura).
+ * 4. Faturas que só existem no e-Fatura mas não no MDI (ex: Banco BPI com 0 no MDI)
+ *    NUNCA são tratadas como duplicados na contabilidade.
+ */
 export function detectEqualValueGroups(
   supplierDisplayName: string,
   nif: string | undefined,
@@ -416,110 +433,64 @@ export function detectEqualValueGroups(
   pdfInvoices: InvoiceItem[]
 ): EqualValueGroup[] {
   const groups: EqualValueGroup[] = [];
-  const amounts = new Set([
-    ...excelInvoices.map((i) => i.amountCents),
-    ...pdfInvoices.map((i) => i.amountCents),
-  ]);
+
+  // Apenas nos interessa verificar valores lançados na Contabilidade (MDI)
+  // onde possam existir lançamentos duplicados por engano pelo utilizador.
+  const amounts = new Set(pdfInvoices.map((i) => i.amountCents));
 
   for (const amtCents of amounts) {
     if (amtCents === 0) continue;
-    const efInvs = excelInvoices.filter((i) => i.amountCents === amtCents);
     const mdiInvs = pdfInvoices.filter((i) => i.amountCents === amtCents);
 
-    // Se só existe 1 documento no total (ou 1 no EF e 1 no MDI), não há duplicados
-    if (efInvs.length + mdiInvs.length <= 1) continue;
-    if (efInvs.length === 1 && mdiInvs.length === 1) continue;
+    // Se no MDI só existe 1 (ou 0) lançamentos deste valor, não pode ser duplicado no MDI
+    if (mdiInvs.length < 2) continue;
+
+    const efInvs = excelInvoices.filter((i) => i.amountCents === amtCents);
 
     let isSuspectedDuplicate = false;
     let duplicateReason = "";
-    const suspiciousEfInvs = new Set<InvoiceItem>();
     const suspiciousMdiInvs = new Set<InvoiceItem>();
+    const suspiciousEfInvs = new Set<InvoiceItem>();
 
-    // 1. Verificar duplicados internos no e-Fatura (mesmo dia com número parecido/igual)
-    for (let i = 0; i < efInvs.length; i++) {
-      for (let j = i + 1; j < efInvs.length; j++) {
-        const invA = efInvs[i];
-        const invB = efInvs[j];
-        const isSameDay = isSameDateOrNear(invA.date, invB.date, 1);
-        const isSimilarNum = areInvoiceNumbersSimilar(invA.documentNumber, invB.documentNumber);
-
-        if (isSameDay && isSimilarNum) {
-          isSuspectedDuplicate = true;
-          suspiciousEfInvs.add(invA);
-          suspiciousEfInvs.add(invB);
-          duplicateReason = `Possível duplicado no e-Fatura: mesmo valor (${fromCents(amtCents).toFixed(2)} €) na mesma data (${invA.date}) com números parecidos ('${invA.documentNumber}' e '${invB.documentNumber}').`;
-        } else if (invA.documentNumber && invA.documentNumber === invB.documentNumber) {
-          isSuspectedDuplicate = true;
-          suspiciousEfInvs.add(invA);
-          suspiciousEfInvs.add(invB);
-          duplicateReason = `Fatura repetida no e-Fatura: documento '${invA.documentNumber}' registado mais do que uma vez (${fromCents(amtCents).toFixed(2)} €).`;
-        }
-      }
-    }
-
-    // 2. Verificar duplicados internos no MDI / Contabilidade (faturas no mesmo dia com número parecido ou idêntico)
+    // Verificar se no MDI existem lançamentos no mesmo dia (+/- 1 dia) com números parecidos ou idênticos
     for (let i = 0; i < mdiInvs.length; i++) {
       for (let j = i + 1; j < mdiInvs.length; j++) {
         const invA = mdiInvs[i];
         const invB = mdiInvs[j];
         const isSameDay = isSameDateOrNear(invA.date, invB.date, 1);
         const isSimilarNum = areInvoiceNumbersSimilar(invA.documentNumber, invB.documentNumber);
+        const isIdenticalNum = invA.documentNumber && invA.documentNumber === invB.documentNumber;
 
-        if (isSameDay && isSimilarNum) {
+        if (isSameDay && (isSimilarNum || isIdenticalNum)) {
+          // Candidatas a duplicado no MDI.
+          // Regra de ouro: "se estiver no e-fatura é pq não é duplicado"
+          const efInvsNearDate = efInvs.filter((ef) => isSameDateOrNear(ef.date, invA.date, 1));
+          const mdiInvsNearDate = mdiInvs.filter((m) => isSameDateOrNear(m.date, invA.date, 1));
+
+          // Se no e-Fatura existirem tantas ou mais faturas como no MDI nessa data,
+          // significa que o fornecedor emitiu de facto múltiplas faturas e estão todas na AT!
+          if (efInvsNearDate.length >= mdiInvsNearDate.length) {
+            continue; // NÃO é duplicado!
+          }
+
+          // Se no e-Fatura há menos faturas do que no MDI, foi lançado a mais no MDI por engano!
           isSuspectedDuplicate = true;
           suspiciousMdiInvs.add(invA);
           suspiciousMdiInvs.add(invB);
-          duplicateReason = `Possível lançamento duplicado por engano no MDI: faturas com valor igual (${fromCents(amtCents).toFixed(2)} €) lançadas no mesmo dia (${invA.date}) e com números parecidos ('${invA.documentNumber}' e '${invB.documentNumber}'). Confirmar se foi lançada duas vezes.`;
-        } else if (invA.documentNumber && invA.documentNumber === invB.documentNumber) {
-          isSuspectedDuplicate = true;
-          suspiciousMdiInvs.add(invA);
-          suspiciousMdiInvs.add(invB);
-          duplicateReason = `Fatura lançada duas vezes por engano no MDI: documento '${invA.documentNumber}' registado mais do que uma vez (${fromCents(amtCents).toFixed(2)} €). Confirmar se foi lançada duas vezes.`;
-        }
-      }
-    }
+          efInvsNearDate.forEach((ef) => suspiciousEfInvs.add(ef));
 
-    // Se foram detetados duplicados no MDI, associar as faturas correspondentes do e-Fatura para conferência lado a lado
-    if (suspiciousMdiInvs.size > 0 && suspiciousEfInvs.size === 0) {
-      efInvs.forEach((i) => suspiciousEfInvs.add(i));
-    }
-
-    // 3. Verificar divergência / ambiguidade no MESMO DIA entre e-Fatura e MDI
-    const datesMap = new Map<string, { ef: InvoiceItem[]; mdi: InvoiceItem[] }>();
-    for (const inv of efInvs) {
-      if (!datesMap.has(inv.date)) datesMap.set(inv.date, { ef: [], mdi: [] });
-      datesMap.get(inv.date)!.ef.push(inv);
-    }
-    for (const inv of mdiInvs) {
-      if (!datesMap.has(inv.date)) datesMap.set(inv.date, { ef: [], mdi: [] });
-      datesMap.get(inv.date)!.mdi.push(inv);
-    }
-
-    for (const [dt, entry] of datesMap.entries()) {
-      if (entry.ef.length > 0 && entry.mdi.length > 0) {
-        if (entry.ef.length !== entry.mdi.length) {
-          // Quantidades desiguais no mesmo dia para o mesmo valor
-          isSuspectedDuplicate = true;
-          entry.ef.forEach((i) => suspiciousEfInvs.add(i));
-          entry.mdi.forEach((i) => suspiciousMdiInvs.add(i));
-          duplicateReason = `Divergência na mesma data (${dt}): ${entry.ef.length} no e-Fatura vs ${entry.mdi.length} na contabilidade (${fromCents(amtCents).toFixed(2)} €). Confirmar se há fatura duplicada.`;
-        } else if (entry.ef.length > 1) {
-          // Múltiplas faturas no mesmo dia em ambos os lados
-          const anySimilar = entry.ef.some((e) =>
-            entry.mdi.some((m) => areInvoiceNumbersSimilar(e.documentNumber, m.documentNumber))
-          );
-          if (anySimilar || !entry.ef.every((e) => e.isReconciled)) {
-            isSuspectedDuplicate = true;
-            entry.ef.forEach((i) => suspiciousEfInvs.add(i));
-            entry.mdi.forEach((i) => suspiciousMdiInvs.add(i));
-            duplicateReason = `Múltiplas faturas de valor igual (${fromCents(amtCents).toFixed(2)} €) na mesma data (${dt}). Confirmar documentos.`;
+          const amtEuros = fromCents(amtCents).toFixed(2);
+          if (isIdenticalNum) {
+            duplicateReason = `Fatura lançada duas vezes por engano no MDI: documento '${invA.documentNumber}' registado mais do que uma vez (${amtEuros} €), existindo apenas ${efInvsNearDate.length} fatura(s) no e-Fatura. Confirmar lançamento.`;
+          } else {
+            duplicateReason = `Possível lançamento duplicado por engano no MDI: faturas com valor igual (${amtEuros} €) lançadas no mesmo dia (${invA.date}) e com números parecidos ('${invA.documentNumber}' e '${invB.documentNumber}'), existindo apenas ${efInvsNearDate.length} fatura(s) no e-Fatura. Confirmar se foi lançada duas vezes.`;
           }
         }
       }
     }
 
-    // Se NÃO for suspeita de duplicado (ex: faturas mensais legítimas em datas distintas), NÃO incluir na Folha 2
-    if (!isSuspectedDuplicate) {
+    // Se NÃO for suspeita de duplicado (ex: faturas mensais legítimas em datas distintas, ou ambas no e-Fatura)
+    if (!isSuspectedDuplicate || suspiciousMdiInvs.size === 0) {
       continue;
     }
 
