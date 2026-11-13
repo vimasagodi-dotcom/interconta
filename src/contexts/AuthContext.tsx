@@ -205,6 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       "ne_dias@sapo.pt",
       "colaborador@interconta.pt",
       "madalenafcn@gmail.com",
+      "araujoraquel@sapo.pt",
     ];
 
     if (adminEmails.includes(normalizedEmail)) {
@@ -212,9 +213,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: true, role: "admin" };
     }
     if (colaboradorEmails.includes(normalizedEmail)) {
-      const name = normalizedEmail.includes("madalena")
-        ? "Madalena Meira (Colaboradora)"
-        : "Nelson Dias (Colaborador)";
+      let name = "Nelson Dias (Colaborador)";
+      if (normalizedEmail.includes("madalena")) {
+        name = "Madalena Meira (Colaboradora)";
+      } else if (normalizedEmail.includes("raquel")) {
+        name = "Raquel Araújo (Colaboradora)";
+      }
       quickLogin("colaborador", normalizedEmail, name);
       return { success: true, role: "colaborador" };
     }

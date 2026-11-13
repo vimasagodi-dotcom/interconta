@@ -140,3 +140,4 @@ describe("Deteção de Faturas com Valores Iguais / Suspeita de Duplicados", () 
     expect(efInvoices[1].needsVerification).toBe(true);
   });
 });
+
